@@ -1,3 +1,4 @@
+### Go template
 # If you prefer the allow list template instead of the deny list, see community template:
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
@@ -7,7 +8,16 @@
 *.dll
 *.so
 *.dylib
-.idea
+.github
+docs
+protobuf
+tests
+.gitmodules
+.gitignore
+.golanci.yml
+cover.svg
+LICENSE
+README.md
 
 # Test binary, built with `go test -c`
 *.test
@@ -24,3 +34,4 @@ go.work.sum
 
 # env file
 .env
+

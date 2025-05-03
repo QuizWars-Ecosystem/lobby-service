@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
+	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/config"
-	"github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	lobby "github.com/QuizWars-Ecosystem/lobby-service/internal/config"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/server"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +18,7 @@ func main() {
 		path = "app/config/config.yaml"
 	}
 
-	manager, err := config.NewManager[users.Config](path)
+	manager, err := config.NewManager[lobby.Config](path)
 	if err != nil {
 		slog.Error("Error loading config: ", "error", err)
 		return

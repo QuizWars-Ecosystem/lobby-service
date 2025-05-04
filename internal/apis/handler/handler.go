@@ -2,6 +2,10 @@ package handler
 
 import (
 	"context"
+	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
+	"sync"
+	"time"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
@@ -11,16 +15,15 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"time"
 )
 
-var (
-	_ lobbyv1.LobbyServiceServer = (*Handler)(nil)
-)
+var _ lobbyv1.LobbyServiceServer = (*Handler)(nil)
 
 type Config struct {
-	modeStats map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
+	ModeStats map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
 }
+
+var _ abstractions.ConfigSubscriber[*Config] = (*Handler)(nil)
 
 type StatPair struct {
 	Min int `mapstructure:"min"`
@@ -33,6 +36,7 @@ type Handler struct {
 	matcher  *matchmaking.Matcher
 	store    *store.Store
 	logger   *zap.Logger
+	mx       sync.Mutex
 	cfg      *Config
 }
 
@@ -41,13 +45,16 @@ func NewHandler(
 	waiter *lobby.Waiter,
 	matcher *matchmaking.Matcher,
 	store *store.Store,
-	logger *zap.Logger) *Handler {
+	logger *zap.Logger,
+	cfg *Config,
+) *Handler {
 	return &Handler{
 		streamer: streamer,
 		waiter:   waiter,
 		matcher:  matcher,
 		store:    store,
 		logger:   logger,
+		cfg:      cfg,
 	}
 }
 
@@ -93,8 +100,10 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 		}
 
 		if err = h.store.UpdateLobbyTTL(ctx, selectedLobby.ID, time.Minute*2); err != nil {
-			h.logger.Warn("Failed to update l TTL", zap.Error(err))
+			h.logger.Warn("Failed to update lobby TTL", zap.Error(err))
 		}
+
+		h.logger.Debug("PLAYER ADDED LOBBY", zap.String("player_id", request.PlayerId), zap.String("lobby_id", selectedLobby.ID))
 
 		l = selectedLobby
 	} else {
@@ -107,7 +116,7 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 
 		h.setLobbyBorders(newLobby)
 
-		if err = h.store.CreateLobby(ctx, l, time.Minute*2); err != nil {
+		if err = h.store.CreateLobby(ctx, newLobby, time.Minute*2); err != nil {
 			h.logger.Warn("Failed to create l", zap.Error(err))
 
 			if err = stream.Send(&lobbyv1.LobbyStatus{
@@ -135,8 +144,20 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 	return nil
 }
 
+func (h *Handler) SectionKey() string {
+	return "HANDLER"
+}
+
+func (h *Handler) UpdateConfig(newCfg *Config) error {
+	h.mx.Lock()
+	defer h.mx.Unlock()
+
+	h.cfg = newCfg
+	return nil
+}
+
 func (h *Handler) setLobbyBorders(lobby *models.Lobby) {
-	pair, ok := h.cfg.modeStats[lobby.Mode]
+	pair, ok := h.cfg.ModeStats[lobby.Mode]
 
 	if !ok {
 		h.logger.Warn("Lobby mode not found in config", zap.String("mode", lobby.Mode))
@@ -147,5 +168,4 @@ func (h *Handler) setLobbyBorders(lobby *models.Lobby) {
 
 	lobby.MinPlayers = pair.Min
 	lobby.MaxPlayers = pair.Max
-	return
 }

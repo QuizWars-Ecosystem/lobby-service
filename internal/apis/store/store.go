@@ -3,17 +3,21 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"time"
+
 	apperrors "github.com/QuizWars-Ecosystem/go-common/pkg/error"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
-	"time"
 )
 
 const (
 	lobbyKey     = "lobby:%s"
 	openLobbyKey = "lobby:open:%s"
+	lockLobbyKey = "lock:lobby:%s"
 )
 
 type Store struct {
@@ -79,10 +83,44 @@ func (s *Store) GetOpenLobbies(ctx context.Context, mode string) ([]*models.Lobb
 
 func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *models.Player) error {
 	key := fmt.Sprintf(lobbyKey, lobbyID)
+	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
+	lockValue := uuid.NewString()
+	lockTTL := 1 * time.Second
+
+	const (
+		maxAttempts = 5
+		retryDelay  = 100 * time.Millisecond
+	)
+
+	var acquired bool
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		ok, err := s.db.SetNX(ctx, lockKey, lockValue, lockTTL).Result()
+		if err != nil {
+			s.logger.Warn("Failed to acquire lock", zap.String("lobby_id", lobbyID), zap.Error(err))
+			return err
+		}
+		if ok {
+			acquired = true
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	if !acquired {
+		s.logger.Warn("Could not acquire lobby lock after retries", zap.String("lobby_id", lobbyID))
+		return apperrors.Internal(errors.New("could not acquire lock"))
+	}
+
+	defer func() {
+		val, err := s.db.Get(ctx, lockKey).Result()
+		if err == nil && val == lockValue {
+			s.db.Del(ctx, lockKey)
+		}
+	}()
 
 	data, err := s.db.Get(ctx, key).Result()
 	if err != nil {
-		s.logger.Error("Failed to get lobby from db", zap.String("id", lobbyID), zap.Error(err))
+		s.logger.Warn("Failed to get lobby from db", zap.String("id", lobbyID), zap.Error(err))
 		return err
 	}
 
@@ -94,11 +132,9 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 
 	l.Players = append(l.Players, player)
 	var total int32
-
 	for _, p := range l.Players {
 		total += p.Rating
 	}
-
 	l.AvgRating = total / int32(len(l.Players))
 
 	newData, _ := json.Marshal(l)

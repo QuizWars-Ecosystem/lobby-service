@@ -1,5 +1,4 @@
 package metrics
 
 func Initialize() {
-
 }

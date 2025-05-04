@@ -1,9 +1,10 @@
 package matchmaking
 
 import (
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"math"
 	"sort"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 )
 
 type Matcher struct {

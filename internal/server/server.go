@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"time"
+
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/streamer"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
-	"net"
-	"net/http"
-	"time"
 
 	"github.com/QuizWars-Ecosystem/go-common/pkg/grpcx/telemetry"
 	grpcrecovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -92,8 +93,9 @@ func NewServer(ctx context.Context, manager *manager.Manager[config.Config]) (*S
 	matcher := matchmaking.NewMatcher(1000, 3)
 	storage := store.NewStore(redisClient, logger.Zap())
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
-	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap())
+	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)
 
+	manager.Subscribe(hand.SectionKey(), func(cfg *config.Config) error { return hand.UpdateConfig(cfg.Handler) })
 	manager.Subscribe(waiter.SectionKey(), func(cfg *config.Config) error { return waiter.UpdateConfig(cfg.Lobby) })
 
 	grpcServer := grpc.NewServer(

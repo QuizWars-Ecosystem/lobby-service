@@ -1,10 +1,11 @@
 package streamer
 
 import (
+	"sync"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"sync"
 )
 
 type StreamManager struct {
@@ -46,15 +47,13 @@ func (s *StreamManager) BroadcastLobbyUpdate(lobbyID string, status *lobbyv1.Lob
 func (s *StreamManager) watchStream(lobbyID, playerID string, stream grpc.ServerStreamingServer[lobbyv1.LobbyStatus]) {
 	ctx := stream.Context()
 
-	for {
-		select {
-		case <-ctx.Done():
-			s.mu.Lock()
-			if s.streams[lobbyID] != nil && s.streams[lobbyID][playerID] != nil {
-				delete(s.streams[lobbyID], playerID)
-			}
-			s.mu.Unlock()
-			return
+	select {
+	case <-ctx.Done():
+		s.mu.Lock()
+		if s.streams[lobbyID] != nil && s.streams[lobbyID][playerID] != nil {
+			delete(s.streams[lobbyID], playerID)
 		}
+		s.mu.Unlock()
+		return
 	}
 }

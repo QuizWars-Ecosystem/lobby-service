@@ -230,7 +230,7 @@ func (r *Result) LogStatsHTML() {
 		for _, mode := range sortedKeys(rowsByMode) {
 			htmlBuilder.WriteString("<h3>🎮 Mode: " + mode + "</h3>")
 			htmlBuilder.WriteString(`<table>
-<tr><th onclick="toggleSort(this.parentNode.parentNode, 0)">Lobby ID</th><th onclick="toggleSort(this.parentNode.parentNode, 1)">Players</th><th onclick="toggleSort(this.parentNode.parentNode, 2)">Avg Rating</th><th onclick="toggleSort(this.parentNode.parentNode, 3)">Min</th><th onclick="toggleSort(this.parentNode.parentNode, 4)">Max</th><th onclick="toggleSort(this.parentNode.parentNode, 5)">Common Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 6)">Unique Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 7)">Status</th><th onclick="toggleSort(this.parentNode.parentNode, 8)">Wait</th></tr>`)
+			<tr><th onclick="toggleSort(this.parentNode.parentNode, 0)">Lobby ID</th><th onclick="toggleSort(this.parentNode.parentNode, 1)">Players</th><th onclick="toggleSort(this.parentNode.parentNode, 2)">Avg Rating</th><th onclick="toggleSort(this.parentNode.parentNode, 3)">Min</th><th onclick="toggleSort(this.parentNode.parentNode, 4)">Max</th><th onclick="toggleSort(this.parentNode.parentNode, 5)">Common Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 6)">Unique Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 7)">Status</th><th onclick="toggleSort(this.parentNode.parentNode, 8)">Wait</th></tr>`)
 			for _, row := range rowsByMode[mode] {
 				htmlBuilder.WriteString("<tr>")
 				htmlBuilder.WriteString("<td>" + row.id + "</td>")

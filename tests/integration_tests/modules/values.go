@@ -2,6 +2,7 @@ package modules
 
 import (
 	"github.com/brianvoe/gofakeit/v7"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
@@ -17,32 +18,28 @@ var (
 )
 
 func prepare(_ *testing.T, _ *config.TestConfig) []player {
-	var categoriesSetAmount = 4
-	var categories [][]int32
-
-	for i := 0; i < categoriesSetAmount; i++ {
-		var cats []int32
-		amount := 3
-
-		for j := 0; j < amount; j++ {
-			cats = append(cats, int32(gofakeit.IntN(10)))
-		}
-
-		categories = append(categories, cats)
-	}
+	_ = gofakeit.Seed(rand.Int())
 
 	playersCount := 1000
 	players := make([]player, playersCount)
 
 	for i := 0; i < playersCount; i++ {
-		p := player{
-			id:         gofakeit.UUID(),
-			rating:     int32(gofakeit.IntN(2000)),
-			categories: categories[gofakeit.IntN(categoriesSetAmount)],
-			mode:       modes[gofakeit.IntN(len(modes))],
+		categoriesAmount := rand.IntN(10)
+		if categoriesAmount <= 2 {
+			categoriesAmount += 4
 		}
 
-		players[i] = p
+		var categories = make([]int32, categoriesAmount)
+		for j := 0; j < categoriesAmount; j++ {
+			categories[j] = rand.Int32N(25)
+		}
+
+		players[i] = player{
+			id:         gofakeit.UUID(),
+			categories: categories,
+			rating:     rand.Int32N(5000),
+			mode:       modes[gofakeit.IntN(len(modes))],
+		}
 	}
 
 	return players

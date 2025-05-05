@@ -2,8 +2,12 @@ package modules
 
 import (
 	"context"
+	"errors"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
 	"log/slog"
 	"math/rand/v2"
 	"sync"
@@ -36,10 +40,9 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 		wg := &sync.WaitGroup{}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
-		defer cancel()
-
 		for _, p := range players {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
+
 			stream, err := client.JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
 				PlayerId:    p.id,
 				Rating:      p.rating,
@@ -51,7 +54,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 			require.NoError(t, err)
 
-			go watchStream(p, stream, r, wg)
+			go watchStream(p, stream, r, wg, cancel)
 
 			diff := rand.IntN(500)
 			time.Sleep(time.Duration(diff) * time.Millisecond)
@@ -61,108 +64,147 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 	})
 }
 
-func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyStatus], r *report.Result, wg *sync.WaitGroup) {
-	ticker := time.NewTicker(time.Second)
+func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyStatus], r *report.Result, wg *sync.WaitGroup, cancelFn func()) {
 	ctx := stream.Context()
 
 	wg.Add(1)
 
-	time.AfterFunc(time.Minute, func() {
+	defer func() {
 		_ = stream.CloseSend()
-		defer wg.Done()
-	})
+		cancelFn()
+		wg.Done()
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			res, err := stream.Recv()
-			if err != nil {
+		default:
+		}
+
+		res, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+				return
+			} else {
 				slog.Error("failed to receive response", err)
+				return
 			}
+		}
 
-			if res != nil {
-				switch res.Status {
-				case lobbyv1.Status_STATUS_STARTING:
-					r.Lock()
-					r.Starter[res.LobbyId] = struct{}{}
+		if res == nil {
+			continue
+		}
 
-					if l, ok := r.Lobbies[res.LobbyId]; ok {
-						l.Players = int(res.CurrentPlayers)
-						if _, rsOk := l.RatingSet[player.id]; !rsOk {
-							l.RatingSet[player.id] = player.rating
-						}
+		switch res.Status {
+		case lobbyv1.Status_STATUS_STARTING:
+			r.Lock()
+			r.Starter[res.LobbyId] = struct{}{}
+			if l, ok := r.Lobbies[res.LobbyId]; ok {
+				l.Players = int(res.CurrentPlayers)
 
-						if _, csOk := l.CategoriesSet[player.id]; !csOk {
-							l.CategoriesSet[player.id] = player.categories
-						}
-
-						l.StartedAt = time.Now()
-						l.Status = report.StartedStatus
-						r.Lobbies[res.LobbyId] = l
-					} else {
-						newLobbyStat := report.LobbyStat{
-							Mode:       player.mode,
-							Players:    int(res.CurrentPlayers),
-							MaxPlayers: int(res.MaxPlayers),
-							RatingSet: map[string]int32{
-								player.id: player.rating,
-							},
-							CategoriesSet: map[string][]int32{
-								player.id: player.categories,
-							},
-							Status: report.StartedStatus,
-						}
-
-						r.Lobbies[res.LobbyId] = newLobbyStat
-					}
-					r.Unlock()
-					return
-				case lobbyv1.Status_STATUS_WAITING:
-					r.Lock()
-					r.WaitedPlayers[player.id] = struct{}{}
-
-					if _, ok := r.Lobbies[res.LobbyId]; !ok {
-						newLobbyStat := report.LobbyStat{
-							Mode:       player.mode,
-							Players:    int(res.CurrentPlayers),
-							MaxPlayers: int(res.MaxPlayers),
-							RatingSet: map[string]int32{
-								player.id: player.rating,
-							},
-							CategoriesSet: map[string][]int32{
-								player.id: player.categories,
-							},
-							CreatedAt: time.Now(),
-							Status:    report.WaitedStatus,
-						}
-						r.Lobbies[res.LobbyId] = newLobbyStat
-
-					}
-					r.Unlock()
-				case lobbyv1.Status_STATUS_TIMEOUT:
-					r.Lock()
-					r.Expired[res.LobbyId] = struct{}{}
-					r.ExpiredPlayers[player.id] = struct{}{}
-					if l, ok := r.Lobbies[res.LobbyId]; ok {
-						l.Status = report.ExpiredStatus
-						r.Lobbies[res.LobbyId] = l
-					}
-					r.Unlock()
-					return
-				case lobbyv1.Status_STATUS_ERROR:
-					r.Lock()
-					r.Errored[res.LobbyId] = struct{}{}
-					r.ErroredPlayers[player.id] = struct{}{}
-					if l, ok := r.Lobbies[res.LobbyId]; ok {
-						l.Status = report.ErroredStatus
-						r.Lobbies[res.LobbyId] = l
-					}
-					r.Unlock()
-					return
+				if _, rsOk := l.RatingSet[player.id]; !rsOk {
+					l.RatingSet[player.id] = player.rating
 				}
+
+				if _, csOk := l.CategoriesSet[player.id]; !csOk {
+					l.CategoriesSet[player.id] = player.categories
+				}
+
+				if l.StartedAt.IsZero() {
+					l.StartedAt = time.Now()
+				}
+
+				l.Status = report.StartedStatus
+				r.Lobbies[res.LobbyId] = l
+			} else {
+				l = report.LobbyStat{
+					Mode:       player.mode,
+					Players:    int(res.CurrentPlayers),
+					MaxPlayers: int(res.MaxPlayers),
+					RatingSet: map[string]int32{
+						player.id: player.rating,
+					},
+					CategoriesSet: map[string][]int32{
+						player.id: player.categories,
+					},
+					Status: report.StartedStatus,
+				}
+
+				r.Lobbies[res.LobbyId] = l
 			}
+			r.Unlock()
+			return
+		case lobbyv1.Status_STATUS_WAITING:
+			r.Lock()
+			r.WaitedPlayers[player.id] = struct{}{}
+			if l, ok := r.Lobbies[res.LobbyId]; !ok {
+				l = report.LobbyStat{
+					Mode:       player.mode,
+					Players:    int(res.CurrentPlayers),
+					MaxPlayers: int(res.MaxPlayers),
+					RatingSet: map[string]int32{
+						player.id: player.rating,
+					},
+					CategoriesSet: map[string][]int32{
+						player.id: player.categories,
+					},
+					CreatedAt: time.Now(),
+					Status:    report.WaitedStatus,
+				}
+				r.Lobbies[res.LobbyId] = l
+			}
+			r.Unlock()
+		case lobbyv1.Status_STATUS_TIMEOUT:
+			r.Lock()
+			r.Expired[res.LobbyId] = struct{}{}
+			r.ExpiredPlayers[player.id] = struct{}{}
+			if l, ok := r.Lobbies[res.LobbyId]; ok {
+				l.Status = report.ExpiredStatus
+				r.Lobbies[res.LobbyId] = l
+			} else {
+				l = report.LobbyStat{
+					Mode:       player.mode,
+					Players:    int(res.CurrentPlayers),
+					MaxPlayers: int(res.MaxPlayers),
+					RatingSet: map[string]int32{
+						player.id: player.rating,
+					},
+					CategoriesSet: map[string][]int32{
+						player.id: player.categories,
+					},
+					CreatedAt: time.Now(),
+					Status:    report.ExpiredStatus,
+				}
+				r.Lobbies[res.LobbyId] = l
+			}
+			r.Unlock()
+			return
+		case lobbyv1.Status_STATUS_ERROR:
+			r.Lock()
+			r.Errored[res.LobbyId] = struct{}{}
+			r.ErroredPlayers[player.id] = struct{}{}
+			if l, ok := r.Lobbies[res.LobbyId]; ok {
+				l.Status = report.ErroredStatus
+				r.Lobbies[res.LobbyId] = l
+			} else {
+				l = report.LobbyStat{
+					Mode:       player.mode,
+					Players:    int(res.CurrentPlayers),
+					MaxPlayers: int(res.MaxPlayers),
+					RatingSet: map[string]int32{
+						player.id: player.rating,
+					},
+					CategoriesSet: map[string][]int32{
+						player.id: player.categories,
+					},
+					CreatedAt: time.Now(),
+					Status:    report.ErroredStatus,
+				}
+				r.Lobbies[res.LobbyId] = l
+			}
+			r.Unlock()
+			return
 		}
 	}
 }

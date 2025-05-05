@@ -42,7 +42,12 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 
 	redisClient, err := clients.NewRedisClient(cfg.Redis.URL,
 		clients.NewRedisOptions(cfg.Redis.URL).
-			WithDialTimeout(time.Second*10),
+			WithDialTimeout(time.Second*15).
+			WithMaxActiveConns(100).
+			WithWriteTimeout(time.Millisecond*500).
+			WithReadTimeout(time.Millisecond*500).
+			WithConnMaxIdleTimeout(time.Second*20).
+			WithPoolSize(5000),
 	)
 	if err != nil {
 		logger.Zap().Error("error initializing redis client", zap.Error(err))

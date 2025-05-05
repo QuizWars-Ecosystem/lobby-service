@@ -70,7 +70,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 
 			// If players not come and max time waiting expired
 			if playerCount == 0 && time.Since(updated.CreatedAt) > w.cfg.MaxLobbyWait {
-				if err = w.store.ExpireLobby(ctx, updated.ID); err != nil {
+				if err = w.store.ExpireLobby(ctx, updated.ID, updated.Mode); err != nil {
 					w.logger.Warn("Failed to expire lobby", zap.String("id", updated.ID), zap.Error(err))
 				}
 
@@ -80,7 +80,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 
 			// Is lobby time is expired
 			if time.Now().After(updated.ExpireAt) {
-				if err = w.store.ExpireLobby(ctx, updated.ID); err != nil {
+				if err = w.store.ExpireLobby(ctx, updated.ID, updated.Mode); err != nil {
 					w.logger.Warn("Failed to expire lobby", zap.String("id", updated.ID), zap.Error(err))
 				}
 
@@ -135,7 +135,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 					// Lobby is ready to start, send request to Game Router Service
 					w.logger.Debug("LOBBY IS READY TO START", zap.String("ID", updated.ID))
 
-					if err = w.store.MarkLobbyAsFull(ctx, updated.ID); err != nil {
+					if err = w.store.MarkLobbyAsFull(ctx, updated.ID, updated.Mode); err != nil {
 						w.logger.Warn("Failed to mark lobby as full", zap.String("id", updated.ID), zap.Error(err))
 					}
 

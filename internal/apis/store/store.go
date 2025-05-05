@@ -63,9 +63,26 @@ func (s *Store) CreateLobby(ctx context.Context, l *models.Lobby, ttl time.Durat
 }
 
 func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lobby, error) {
-	keys, err := s.db.ZRange(ctx, fmt.Sprintf(activeLobbyKey, mode), 0, -1).Result()
+	zsetKey := fmt.Sprintf(activeLobbyKey, mode)
+
+	ids, err := s.db.ZRange(ctx, zsetKey, 0, -1).Result()
 	if err != nil {
 		s.logger.Error("Failed to get open lobbies", zap.String("mode", mode), zap.Error(err))
+		return nil, err
+	}
+
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	keys := make([]string, len(ids))
+	for i, id := range ids {
+		keys[i] = fmt.Sprintf(lobbyKey, id)
+	}
+
+	values, err := s.db.MGet(ctx, keys...).Result()
+	if err != nil {
+		s.logger.Error("Failed to batch fetch lobbies", zap.Error(err))
 		return nil, err
 	}
 
@@ -74,23 +91,16 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 		missingKeys []string
 	)
 
-	var data string
-
-	for _, id := range keys {
-		data, err = s.db.Get(ctx, fmt.Sprintf(lobbyKey, id)).Result()
-		if err != nil {
-			if errors.Is(err, redis.Nil) {
-				s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", id))
-				missingKeys = append(missingKeys, id)
-			} else {
-				s.logger.Error("Failed to get lobby", zap.String("id", id), zap.Error(err))
-			}
+	for i, val := range values {
+		if val == nil {
+			s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", ids[i]))
+			missingKeys = append(missingKeys, ids[i])
 			continue
 		}
 
 		var l models.Lobby
-		if err = json.Unmarshal([]byte(data), &l); err != nil {
-			s.logger.Error("Failed to unmarshal lobby", zap.String("id", id), zap.Error(err))
+		if err = json.Unmarshal([]byte(val.(string)), &l); err != nil {
+			s.logger.Error("Failed to unmarshal lobby", zap.String("id", ids[i]), zap.Error(err))
 			continue
 		}
 
@@ -101,13 +111,13 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 		lobbies = append(lobbies, &l)
 	}
 
-	// Clean ZSET from wrong links
 	if len(missingKeys) > 0 {
-		ids := make([]interface{}, len(missingKeys))
-		for i, k := range missingKeys {
-			ids[i] = k
+		members := make([]interface{}, len(missingKeys))
+		for i, id := range missingKeys {
+			members[i] = id
 		}
-		if _, err := s.db.ZRem(ctx, fmt.Sprintf(activeLobbyKey, mode), ids...).Result(); err != nil {
+
+		if _, err = s.db.ZRem(ctx, zsetKey, members...).Result(); err != nil {
 			s.logger.Warn("Failed to clean up broken lobby references", zap.Error(err))
 		}
 	}
@@ -148,34 +158,18 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 		l.Categories = mergeCategories(l.Categories, player.Categories)
 		l.LastJoinedAt = time.Now()
 
-		newData, _ := json.Marshal(l)
+		newData, err := json.Marshal(l)
+		if err != nil {
+			s.logger.Error("Failed to marshal lobby", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
+
 		if err = s.db.Set(ctx, key, newData, time.Minute*5).Err(); err != nil {
 			s.logger.Error("Failed to set lobby to db", zap.String("id", lobbyID), zap.Error(err))
 			return err
 		}
 
 		return nil
-	})
-}
-
-func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID string) error {
-	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
-
-	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
-		pipe := s.db.TxPipeline()
-
-		if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
-			s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
-			return err
-		}
-
-		if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
-			s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
-			return err
-		}
-
-		_, err := pipe.Exec(ctx)
-		return err
 	})
 }
 
@@ -203,25 +197,38 @@ func (s *Store) GetLobby(ctx context.Context, lobbyID string) (*models.Lobby, er
 	return &l, nil
 }
 
-func (s *Store) ExpireLobby(ctx context.Context, lobbyID string) error {
+func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID, mode string) error {
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
 	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
-		pipe := s.db.TxPipeline()
-
-		if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
-			s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
-			return err
-		}
-
-		if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
-			s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
-			return err
-		}
-
-		_, err := pipe.Exec(ctx)
-		return err
+		return s.removeLobby(ctx, lobbyID, mode)
 	})
+}
+
+func (s *Store) ExpireLobby(ctx context.Context, lobbyID, mode string) error {
+	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
+
+	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+		return s.removeLobby(ctx, lobbyID, mode)
+	})
+}
+
+func (s *Store) removeLobby(ctx context.Context, lobbyID, mode string) error {
+	pipe := s.db.TxPipeline()
+
+	zsetKey := fmt.Sprintf(activeLobbyKey, mode)
+	key := fmt.Sprintf(lobbyKey, lobbyID)
+
+	pipe.ZRem(ctx, zsetKey, lobbyID)
+	pipe.Del(ctx, key)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		s.logger.Warn("Failed to remove lobby", zap.String("lobby_id", lobbyID), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (s *Store) withRedisLock(ctx context.Context, key string, ttl time.Duration, fn func() error) error {

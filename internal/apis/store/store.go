@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	lobbyKey     = "lobby:%s"
-	openLobbyKey = "lobby:open:%s"
-	lockLobbyKey = "lock:lobby:%s"
+	lobbyKey       = "lobby:%s"
+	activeLobbyKey = "lobby:active:%s"
+	lockLobbyKey   = "lock:lobby:%s"
 )
 
 type Store struct {
@@ -39,9 +39,13 @@ func (s *Store) CreateLobby(ctx context.Context, l *models.Lobby, ttl time.Durat
 
 	pipe := s.db.TxPipeline()
 
-	pipe.Set(ctx, key, data, ttl)
+	if err = pipe.Set(ctx, key, data, ttl).Err(); err != nil {
+		s.logger.Error("Failed to save lobby", zap.String("id", l.ID), zap.Error(err))
+	}
 
-	pipe.ZAdd(ctx, fmt.Sprintf(openLobbyKey, l.Mode), redis.Z{Score: float64(l.AvgRating), Member: l.ID})
+	if err = pipe.ZAdd(ctx, fmt.Sprintf(activeLobbyKey, l.Mode), redis.Z{Score: float64(l.AvgRating), Member: l.ID}).Err(); err != nil {
+		s.logger.Error("Failed to save lobby as open", zap.String("id", l.ID), zap.Error(err))
+	}
 
 	_, err = pipe.Exec(ctx)
 	if err != nil {
@@ -52,8 +56,8 @@ func (s *Store) CreateLobby(ctx context.Context, l *models.Lobby, ttl time.Durat
 	return err
 }
 
-func (s *Store) GetOpenLobbies(ctx context.Context, mode string) ([]*models.Lobby, error) {
-	keys, err := s.db.ZRange(ctx, fmt.Sprintf(openLobbyKey, mode), 0, -1).Result()
+func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lobby, error) {
+	keys, err := s.db.ZRange(ctx, fmt.Sprintf(activeLobbyKey, mode), 0, -1).Result()
 	if err != nil {
 		s.logger.Error("Failed to get open lobbies", zap.String("mode", mode), zap.Error(err))
 		return nil, err
@@ -130,12 +134,20 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 		return err
 	}
 
+	if len(l.Players) >= l.MaxPlayers {
+		s.logger.Warn("Lobby is already full", zap.String("lobby_id", lobbyID))
+		return apperrors.BadRequest(errors.New("lobby is full"))
+	}
+
 	l.Players = append(l.Players, player)
+
 	var total int32
 	for _, p := range l.Players {
 		total += p.Rating
 	}
 	l.AvgRating = total / int32(len(l.Players))
+	l.Categories = mergeCategories(l.Categories, player.Categories)
+	l.LastJoinedAt = time.Now()
 
 	newData, _ := json.Marshal(l)
 	if err = s.db.Set(ctx, key, newData, 30*time.Second).Err(); err != nil {
@@ -144,6 +156,21 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 	}
 
 	return nil
+}
+
+func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID string) error {
+	pipe := s.db.TxPipeline()
+
+	if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
+		s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
+	}
+
+	if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
+		s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
+	}
+
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 func (s *Store) UpdateLobbyTTL(ctx context.Context, lobbyID string, ttl time.Duration) error {
@@ -172,4 +199,21 @@ func (s *Store) MarkLobbyAsStarted(ctx context.Context, lobbyID string) error {
 
 func (s *Store) ExpireLobby(ctx context.Context, lobbyID string) error {
 	return s.db.Del(ctx, fmt.Sprintf("lobby:%s", lobbyID)).Err()
+}
+
+func mergeCategories(a, b []int32) []int32 {
+	set := make(map[int32]struct{}, len(a)+len(b))
+	for _, v := range a {
+		set[v] = struct{}{}
+	}
+	for _, v := range b {
+		set[v] = struct{}{}
+	}
+
+	result := make([]int32, 0, len(set))
+	for k := range set {
+		result = append(result, k)
+	}
+
+	return result
 }

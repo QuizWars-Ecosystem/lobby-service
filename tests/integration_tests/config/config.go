@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
 	"time"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
@@ -46,13 +47,24 @@ func NewTestConfig() *TestConfig {
 						Min: 2,
 						Max: 4,
 					},
+					"1v1": {
+						Min: 2,
+						Max: 2,
+					},
 				},
+				LobbyTLL: time.Minute,
 			},
 			Lobby: &lobby.Config{
 				TickerTimeout:    time.Second,
-				MaxLobbyWait:     time.Minute * 5,
+				MaxLobbyWait:     time.Minute,
 				LobbyIdleExtend:  time.Second * 15,
 				MinReadyDuration: time.Second * 10,
+			},
+			Matcher: &matchmaking.Config{
+				CategoryWeight:    0.5,
+				PlayersFillWeight: 0.3,
+				RatingWeight:      0.2,
+				MaxExpectedRating: 1000,
 			},
 		},
 		Redis: &redisCfg,

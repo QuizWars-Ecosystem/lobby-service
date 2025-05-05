@@ -21,6 +21,7 @@ var _ lobbyv1.LobbyServiceServer = (*Handler)(nil)
 
 type Config struct {
 	ModeStats map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
+	LobbyTLL  time.Duration       `mapstructure:"lobby_tll" yaml:"lobby_tll" default:"4m"`
 }
 
 var _ abstractions.ConfigSubscriber[*Config] = (*Handler)(nil)
@@ -69,7 +70,7 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 
 	mode := request.Mode
 
-	openLobbies, err := h.store.GetOpenLobbies(ctx, mode)
+	activeLobbies, err := h.store.GetActiveLobbies(ctx, mode)
 	if err != nil {
 		if err = stream.Send(&lobbyv1.LobbyStatus{
 			Status: lobbyv1.Status_STATUS_ERROR,
@@ -80,7 +81,7 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 		return err
 	}
 
-	candidateLobbies := h.matcher.FilterLobbies(openLobbies, player)
+	candidateLobbies := h.matcher.FilterLobbies(activeLobbies, player)
 	selectedLobby := h.matcher.SelectBestLobby(candidateLobbies, player)
 
 	var l *models.Lobby
@@ -103,20 +104,27 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 			h.logger.Warn("Failed to update lobby TTL", zap.Error(err))
 		}
 
-		h.logger.Debug("PLAYER ADDED LOBBY", zap.String("player_id", request.PlayerId), zap.String("lobby_id", selectedLobby.ID))
+		h.streamer.RegisterStreamWithSubscription(ctx, selectedLobby.ID, player.ID, stream)
+
+		// h.logger.Debug("PLAYER ADDED LOBBY", zap.String("player_id", request.PlayerId), zap.String("lobby_id", selectedLobby.ID))
 
 		l = selectedLobby
 	} else {
+		h.mx.Lock()
 		newLobby := &models.Lobby{
 			ID:         uuid.New().String(),
 			Mode:       mode,
 			Categories: request.CategoryIds,
 			Players:    []*models.Player{player},
+			AvgRating:  player.Rating,
+			CreatedAt:  time.Now(),
+			ExpireAt:   time.Now().Add(h.cfg.LobbyTLL),
 		}
+		h.mx.Unlock()
 
 		h.setLobbyBorders(newLobby)
 
-		if err = h.store.CreateLobby(ctx, newLobby, time.Minute*2); err != nil {
+		if err = h.store.CreateLobby(ctx, newLobby, time.Minute*5); err != nil {
 			h.logger.Warn("Failed to create l", zap.Error(err))
 
 			if err = stream.Send(&lobbyv1.LobbyStatus{
@@ -135,9 +143,9 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 		defer cancel()
 
 		go h.waiter.WaitForLobbyFill(lobbyCtx, l)
-	}
 
-	h.streamer.RegisterStream(l.ID, request.PlayerId, stream)
+		h.streamer.RegisterStream(l.ID, request.PlayerId, stream)
+	}
 
 	<-ctx.Done()
 
@@ -157,10 +165,12 @@ func (h *Handler) UpdateConfig(newCfg *Config) error {
 }
 
 func (h *Handler) setLobbyBorders(lobby *models.Lobby) {
+	h.mx.Lock()
 	pair, ok := h.cfg.ModeStats[lobby.Mode]
+	h.mx.Unlock()
 
 	if !ok {
-		h.logger.Warn("Lobby mode not found in config", zap.String("mode", lobby.Mode))
+		h.logger.Error("Lobby mode not found in config", zap.String("mode", lobby.Mode))
 		lobby.MinPlayers = 4
 		lobby.MaxPlayers = 8
 		return

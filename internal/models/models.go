@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type Player struct {
 	ID         string  `json:"id"`
 	Rating     int32   `json:"rating"`
@@ -7,11 +9,14 @@ type Player struct {
 }
 
 type Lobby struct {
-	ID         string    `json:"id"`
-	Mode       string    `json:"mode"`
-	Categories []int32   `json:"categories"`
-	Players    []*Player `json:"players"`
-	AvgRating  int32     `json:"avg_rating"`
-	MinPlayers int       `json:"min_players"`
-	MaxPlayers int       `json:"max_players"`
+	ID           string    `json:"id"`
+	Mode         string    `json:"mode"`
+	Categories   []int32   `json:"categories"`
+	Players      []*Player `json:"players"`
+	AvgRating    int32     `json:"avg_rating"`
+	MinPlayers   int       `json:"min_players"`
+	MaxPlayers   int       `json:"max_players"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastJoinedAt time.Time `json:"last_joined_at"`
+	ExpireAt     time.Time `json:"expire_at"`
 }

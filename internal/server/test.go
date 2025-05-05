@@ -34,7 +34,7 @@ type TestServer struct {
 	closer     *closer.Closer
 }
 
-func NewTestServer(ctx context.Context, cfg *config.Config) (*TestServer, error) {
+func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 	cl := closer.NewCloser()
 
 	logger := log.NewLogger(cfg.Local, cfg.Logger.Level)
@@ -49,8 +49,8 @@ func NewTestServer(ctx context.Context, cfg *config.Config) (*TestServer, error)
 		return nil, fmt.Errorf("error initializing redis client: %w", err)
 	}
 
-	streamManager := streamer.NewStreamManager(logger.Zap())
-	matcher := matchmaking.NewMatcher(1000, 2)
+	streamManager := streamer.NewStreamManager(redisClient, logger.Zap())
+	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	storage := store.NewStore(redisClient, logger.Zap())
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
 	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)

@@ -89,14 +89,15 @@ func NewServer(ctx context.Context, manager *manager.Manager[config.Config]) (*S
 
 	grpcprometheus.EnableHandlingTimeHistogram()
 
-	streamManager := streamer.NewStreamManager(logger.Zap())
-	matcher := matchmaking.NewMatcher(1000, 3)
+	streamManager := streamer.NewStreamManager(redisClient, logger.Zap())
+	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	storage := store.NewStore(redisClient, logger.Zap())
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
 	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)
 
 	manager.Subscribe(hand.SectionKey(), func(cfg *config.Config) error { return hand.UpdateConfig(cfg.Handler) })
 	manager.Subscribe(waiter.SectionKey(), func(cfg *config.Config) error { return waiter.UpdateConfig(cfg.Lobby) })
+	manager.Subscribe(matcher.SectionKey(), func(cfg *config.Config) error { return matcher.UpdateConfig(cfg.Matcher) })
 
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(

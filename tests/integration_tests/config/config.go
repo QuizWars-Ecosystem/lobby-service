@@ -21,6 +21,7 @@ type TestConfig struct {
 
 func NewTestConfig() *TestConfig {
 	redisCfg := test.DefaultRedisConfig()
+	redisCfg.Ports = []int{6380}
 
 	return &TestConfig{
 		ServiceConfig: &config.Config{
@@ -28,7 +29,7 @@ func NewTestConfig() *TestConfig {
 				Name:         "lobby-service",
 				Address:      "lobby_address",
 				Local:        true,
-				GRPCPort:     50051,
+				GRPCPort:     50052,
 				StartTimeout: time.Second * 30,
 				StopTimeout:  time.Second * 30,
 				ConsulURL:    "consul:8500",
@@ -51,11 +52,16 @@ func NewTestConfig() *TestConfig {
 						Min: 2,
 						Max: 2,
 					},
+					"mega": {
+						Min: 12,
+						Max: 64,
+					},
 				},
-				LobbyTLL: time.Minute,
+				LobbyTLL:         time.Minute,
+				MaxLobbyAttempts: 3,
 			},
 			Lobby: &lobby.Config{
-				TickerTimeout:    time.Second,
+				TickerTimeout:    time.Millisecond * 500,
 				MaxLobbyWait:     time.Minute,
 				LobbyIdleExtend:  time.Second * 15,
 				MinReadyDuration: time.Second * 10,

@@ -12,19 +12,20 @@ var (
 		"classic",
 		"battle",
 		"1v1",
+		"mega",
 	}
 )
 
 func prepare(_ *testing.T, _ *config.TestConfig) []player {
-	var categoriesSetAmount = 6
+	var categoriesSetAmount = 4
 	var categories [][]int32
 
 	for i := 0; i < categoriesSetAmount; i++ {
 		var cats []int32
-		amount := 6
+		amount := 3
 
 		for j := 0; j < amount; j++ {
-			cats = append(cats, int32(gofakeit.IntN(25)))
+			cats = append(cats, int32(gofakeit.IntN(10)))
 		}
 
 		categories = append(categories, cats)
@@ -36,7 +37,7 @@ func prepare(_ *testing.T, _ *config.TestConfig) []player {
 	for i := 0; i < playersCount; i++ {
 		p := player{
 			id:         gofakeit.UUID(),
-			rating:     int32(gofakeit.IntN(10_000)),
+			rating:     int32(gofakeit.IntN(2000)),
 			categories: categories[gofakeit.IntN(categoriesSetAmount)],
 			mode:       modes[gofakeit.IntN(len(modes))],
 		}

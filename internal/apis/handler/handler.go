@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,8 +21,9 @@ import (
 var _ lobbyv1.LobbyServiceServer = (*Handler)(nil)
 
 type Config struct {
-	ModeStats map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
-	LobbyTLL  time.Duration       `mapstructure:"lobby_tll" yaml:"lobby_tll" default:"4m"`
+	ModeStats        map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
+	LobbyTLL         time.Duration       `mapstructure:"lobby_tll" yaml:"lobby_tll" default:"4m"`
+	MaxLobbyAttempts int                 `mapstructure:"max_lobby_attempts" yaml:"max_lobby_attempts" default:"3"`
 }
 
 var _ abstractions.ConfigSubscriber[*Config] = (*Handler)(nil)
@@ -88,7 +90,7 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 	if selectedLobby != nil {
 		err = h.store.AddPlayerToLobby(ctx, selectedLobby.ID, player)
 		if err != nil {
-			h.logger.Warn("Failed to add player to l", zap.Error(err))
+			h.logger.Warn("Failed to add player to lobby", zap.String("lobby_id", selectedLobby.ID), zap.Error(err))
 
 			if err = stream.Send(&lobbyv1.LobbyStatus{
 				Status: lobbyv1.Status_STATUS_ERROR,
@@ -178,4 +180,8 @@ func (h *Handler) setLobbyBorders(lobby *models.Lobby) {
 
 	lobby.MinPlayers = pair.Min
 	lobby.MaxPlayers = pair.Max
+}
+
+func isLockError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "could not acquire lock")
 }

@@ -30,28 +30,34 @@ func NewStore(db redis.UniversalClient, logger *zap.Logger) *Store {
 }
 
 func (s *Store) CreateLobby(ctx context.Context, l *models.Lobby, ttl time.Duration) error {
-	key := fmt.Sprintf(lobbyKey, l.ID)
-	data, err := json.Marshal(l)
-	if err != nil {
-		s.logger.Error("Failed to marshal lobby", zap.String("id", l.ID), zap.Error(err))
-		return apperrors.Internal(err)
-	}
+	lockKey := fmt.Sprintf(lockLobbyKey, l.ID)
 
-	pipe := s.db.TxPipeline()
+	err := s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+		key := fmt.Sprintf(lobbyKey, l.ID)
+		data, err := json.Marshal(l)
+		if err != nil {
+			s.logger.Error("Failed to marshal lobby", zap.String("id", l.ID), zap.Error(err))
+			return apperrors.Internal(err)
+		}
 
-	if err = pipe.Set(ctx, key, data, ttl).Err(); err != nil {
-		s.logger.Error("Failed to save lobby", zap.String("id", l.ID), zap.Error(err))
-	}
+		pipe := s.db.TxPipeline()
 
-	if err = pipe.ZAdd(ctx, fmt.Sprintf(activeLobbyKey, l.Mode), redis.Z{Score: float64(l.AvgRating), Member: l.ID}).Err(); err != nil {
-		s.logger.Error("Failed to save lobby as open", zap.String("id", l.ID), zap.Error(err))
-	}
+		if err = pipe.Set(ctx, key, data, ttl).Err(); err != nil {
+			s.logger.Error("Failed to save lobby", zap.String("id", l.ID), zap.Error(err))
+		}
 
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		s.logger.Error("Failed to cache lobby", zap.String("id", l.ID), zap.Error(err))
-		return apperrors.Internal(err)
-	}
+		if err = pipe.ZAdd(ctx, fmt.Sprintf(activeLobbyKey, l.Mode), redis.Z{Score: float64(l.AvgRating), Member: l.ID}).Err(); err != nil {
+			s.logger.Error("Failed to save lobby as open", zap.String("id", l.ID), zap.Error(err))
+		}
+
+		_, err = pipe.Exec(ctx)
+		if err != nil {
+			s.logger.Error("Failed to cache lobby", zap.String("id", l.ID), zap.Error(err))
+			return apperrors.Internal(err)
+		}
+
+		return err
+	})
 
 	return err
 }
@@ -63,13 +69,22 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 		return nil, err
 	}
 
-	var lobbies []*models.Lobby
+	var (
+		lobbies     []*models.Lobby
+		missingKeys []string
+	)
+
 	var data string
 
 	for _, id := range keys {
-		data, err = s.db.Get(ctx, "lobby:"+id).Result()
+		data, err = s.db.Get(ctx, fmt.Sprintf(lobbyKey, id)).Result()
 		if err != nil {
-			s.logger.Error("Failed to get lobby", zap.String("id", id), zap.Error(err))
+			if errors.Is(err, redis.Nil) {
+				s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", id))
+				missingKeys = append(missingKeys, id)
+			} else {
+				s.logger.Error("Failed to get lobby", zap.String("id", id), zap.Error(err))
+			}
 			continue
 		}
 
@@ -79,102 +94,97 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 			continue
 		}
 
+		if len(l.Players) >= l.MaxPlayers {
+			continue
+		}
+
 		lobbies = append(lobbies, &l)
+	}
+
+	// Clean ZSET from wrong links
+	if len(missingKeys) > 0 {
+		ids := make([]interface{}, len(missingKeys))
+		for i, k := range missingKeys {
+			ids[i] = k
+		}
+		if _, err := s.db.ZRem(ctx, fmt.Sprintf(activeLobbyKey, mode), ids...).Result(); err != nil {
+			s.logger.Warn("Failed to clean up broken lobby references", zap.Error(err))
+		}
 	}
 
 	return lobbies, nil
 }
 
 func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *models.Player) error {
-	key := fmt.Sprintf(lobbyKey, lobbyID)
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
-	lockValue := uuid.NewString()
-	lockTTL := 1 * time.Second
 
-	const (
-		maxAttempts = 5
-		retryDelay  = 100 * time.Millisecond
-	)
+	return s.withRedisLock(ctx, lockKey, 3*time.Second, func() error {
+		key := fmt.Sprintf(lobbyKey, lobbyID)
 
-	var acquired bool
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		ok, err := s.db.SetNX(ctx, lockKey, lockValue, lockTTL).Result()
+		data, err := s.db.Get(ctx, key).Result()
 		if err != nil {
-			s.logger.Warn("Failed to acquire lock", zap.String("lobby_id", lobbyID), zap.Error(err))
+			s.logger.Warn("Failed to get lobby from db", zap.String("id", lobbyID), zap.Error(err))
 			return err
 		}
-		if ok {
-			acquired = true
-			break
+
+		var l models.Lobby
+		if err = json.Unmarshal([]byte(data), &l); err != nil {
+			s.logger.Error("Failed to unmarshal lobby", zap.String("id", lobbyID), zap.Error(err))
+			return err
 		}
-		time.Sleep(retryDelay)
-	}
 
-	if !acquired {
-		s.logger.Warn("Could not acquire lobby lock after retries", zap.String("lobby_id", lobbyID))
-		return apperrors.Internal(errors.New("could not acquire lock"))
-	}
-
-	defer func() {
-		val, err := s.db.Get(ctx, lockKey).Result()
-		if err == nil && val == lockValue {
-			s.db.Del(ctx, lockKey)
+		if len(l.Players) >= l.MaxPlayers {
+			_ = s.db.ZRem(ctx, fmt.Sprintf(activeLobbyKey, l.Mode), lobbyID)
+			return apperrors.BadRequest(errors.New("lobby is full"))
 		}
-	}()
 
-	data, err := s.db.Get(ctx, key).Result()
-	if err != nil {
-		s.logger.Warn("Failed to get lobby from db", zap.String("id", lobbyID), zap.Error(err))
-		return err
-	}
+		l.Players = append(l.Players, player)
 
-	var l models.Lobby
-	if err = json.Unmarshal([]byte(data), &l); err != nil {
-		s.logger.Error("Failed to unmarshal lobby", zap.String("id", lobbyID), zap.Error(err))
-		return err
-	}
+		var total int32
+		for _, p := range l.Players {
+			total += p.Rating
+		}
+		l.AvgRating = total / int32(len(l.Players))
+		l.Categories = mergeCategories(l.Categories, player.Categories)
+		l.LastJoinedAt = time.Now()
 
-	if len(l.Players) >= l.MaxPlayers {
-		s.logger.Warn("Lobby is already full", zap.String("lobby_id", lobbyID))
-		return apperrors.BadRequest(errors.New("lobby is full"))
-	}
+		newData, _ := json.Marshal(l)
+		if err = s.db.Set(ctx, key, newData, time.Minute*5).Err(); err != nil {
+			s.logger.Error("Failed to set lobby to db", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
 
-	l.Players = append(l.Players, player)
-
-	var total int32
-	for _, p := range l.Players {
-		total += p.Rating
-	}
-	l.AvgRating = total / int32(len(l.Players))
-	l.Categories = mergeCategories(l.Categories, player.Categories)
-	l.LastJoinedAt = time.Now()
-
-	newData, _ := json.Marshal(l)
-	if err = s.db.Set(ctx, key, newData, 30*time.Second).Err(); err != nil {
-		s.logger.Error("Failed to set lobby to db", zap.String("id", lobbyID), zap.Error(err))
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID string) error {
-	pipe := s.db.TxPipeline()
+	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
-	if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
-		s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
-	}
+	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+		pipe := s.db.TxPipeline()
 
-	if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
-		s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
-	}
+		if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
+			s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
 
-	_, err := pipe.Exec(ctx)
-	return err
+		if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
+			s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
+
+		_, err := pipe.Exec(ctx)
+		return err
+	})
 }
 
 func (s *Store) UpdateLobbyTTL(ctx context.Context, lobbyID string, ttl time.Duration) error {
-	return s.db.Expire(ctx, fmt.Sprintf(lobbyKey, lobbyID), ttl).Err()
+	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
+
+	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+		return s.db.Expire(ctx, fmt.Sprintf(lobbyKey, lobbyID), ttl).Err()
+	})
 }
 
 func (s *Store) GetLobby(ctx context.Context, lobbyID string) (*models.Lobby, error) {
@@ -193,12 +203,61 @@ func (s *Store) GetLobby(ctx context.Context, lobbyID string) (*models.Lobby, er
 	return &l, nil
 }
 
-func (s *Store) MarkLobbyAsStarted(ctx context.Context, lobbyID string) error {
-	return s.db.ZRem(ctx, "lobby:open", lobbyID).Err()
+func (s *Store) ExpireLobby(ctx context.Context, lobbyID string) error {
+	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
+
+	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+		pipe := s.db.TxPipeline()
+
+		if err := pipe.Del(ctx, fmt.Sprintf(activeLobbyKey, lobbyID)).Err(); err != nil {
+			s.logger.Warn("Failed to remove full lobby from active", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
+
+		if err := pipe.Del(ctx, fmt.Sprintf(lobbyKey, lobbyID)).Err(); err != nil {
+			s.logger.Warn("Failed to expire lobby", zap.String("id", lobbyID), zap.Error(err))
+			return err
+		}
+
+		_, err := pipe.Exec(ctx)
+		return err
+	})
 }
 
-func (s *Store) ExpireLobby(ctx context.Context, lobbyID string) error {
-	return s.db.Del(ctx, fmt.Sprintf("lobby:%s", lobbyID)).Err()
+func (s *Store) withRedisLock(ctx context.Context, key string, ttl time.Duration, fn func() error) error {
+	lockValue := uuid.NewString()
+	const (
+		maxAttempts = 5
+		retryDelay  = 100 * time.Millisecond
+	)
+
+	var acquired bool
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		ok, err := s.db.SetNX(ctx, key, lockValue, ttl).Result()
+		if err != nil {
+			s.logger.Warn("Failed to acquire lock", zap.String("key", key), zap.Error(err))
+			return err
+		}
+		if ok {
+			acquired = true
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	if !acquired {
+		s.logger.Warn("Could not acquire lock after retries", zap.String("key", key))
+		return apperrors.Internal(errors.New("could not acquire lock"))
+	}
+
+	defer func() {
+		val, err := s.db.Get(ctx, key).Result()
+		if err == nil && val == lockValue {
+			s.db.Del(ctx, key)
+		}
+	}()
+
+	return fn()
 }
 
 func mergeCategories(a, b []int32) []int32 {

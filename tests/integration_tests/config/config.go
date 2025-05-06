@@ -1,9 +1,10 @@
 package config
 
 import (
+	"time"
+
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
-	"time"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
 
@@ -18,13 +19,31 @@ type TestConfig struct {
 	ServiceConfig *config.Config
 	Redis         *test.RedisClusterConfig
 	NATS          *test.NatsConfig
+	ServerAmount  int
+	Generator     *Generator
 }
 
 func NewTestConfig() *TestConfig {
 	redisClusterCfg := test.DefaultRedisClusterConfig()
 	natsCfg := test.DefaultNatsConfig()
 
+	redisClusterCfg.Masters = 3
+	redisClusterCfg.Replicas = 1
+
 	return &TestConfig{
+		ServerAmount: 3,
+		Generator: &Generator{
+			PlayersCount:  10_000,
+			MaxRating:     10_000,
+			CategoriesMax: 10,
+			CategoryMaxID: 50,
+			Modes: []string{
+				"classic",
+				"battle",
+				"1v1",
+				"mega",
+			},
+		},
 		ServiceConfig: &config.Config{
 			ServiceConfig: &def.ServiceConfig{
 				Name:         "lobby-service",
@@ -69,13 +88,21 @@ func NewTestConfig() *TestConfig {
 				MinReadyDuration: time.Second * 10,
 			},
 			Matcher: &matchmaking.Config{
-				CategoryWeight:    0.5,
-				PlayersFillWeight: 0.3,
+				CategoryWeight:    0.7,
 				RatingWeight:      0.2,
-				MaxExpectedRating: 1500,
+				PlayersFillWeight: 0.1,
+				MaxExpectedRating: 500,
 			},
 		},
 		Redis: &redisClusterCfg,
 		NATS:  &natsCfg,
 	}
+}
+
+type Generator struct {
+	PlayersCount  int
+	MaxRating     int32
+	CategoriesMax int
+	CategoryMaxID int32
+	Modes         []string
 }

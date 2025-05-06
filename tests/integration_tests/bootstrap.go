@@ -2,14 +2,12 @@ package integration_tests
 
 import (
 	"context"
-	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
-	"strings"
-	"testing"
-	"time"
-
+	"fmt"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/testing/containers"
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"testing"
 )
 
 type runServerFn func(t *testing.T, cfg *config.TestConfig)
@@ -25,28 +23,21 @@ func prepareInfrastructure(
 
 	defer testcontainers.CleanupContainer(t, natsContainer)
 
-	natsUrl, err := natsContainer.ConnectionString(ctx)
-	require.NoError(t, err)
-
-	cfg.ServiceConfig.NATS.URL = strings.TrimPrefix(natsUrl, "nats://")
+	cfg.ServiceConfig.NATS.URL = ":4222"
 
 	clusterContainer, err := containers.NewRedisClusterContainers(ctx, cfg.Redis)
 	require.NoError(t, err)
 
 	defer testcontainers.CleanupContainer(t, clusterContainer)
 
-	urls := []string{
-		"host.docker.internal:7000",
-		"host.docker.internal:7001",
-		"host.docker.internal:7002",
-		"host.docker.internal:7003",
-		"host.docker.internal:7004",
-		"host.docker.internal:7005",
+	totalNodes := cfg.Redis.Masters + cfg.Redis.Replicas*cfg.Redis.Masters
+
+	exposedPorts := make([]string, totalNodes)
+	for i := 0; i < totalNodes; i++ {
+		exposedPorts[i] = fmt.Sprintf(":%d", 7000+i)
 	}
 
-	cfg.ServiceConfig.Redis.URLs = urls
-
-	time.Sleep(time.Second * 3)
+	cfg.ServiceConfig.Redis.URLs = exposedPorts
 
 	runServerFn(t, cfg)
 }

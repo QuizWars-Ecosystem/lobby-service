@@ -126,7 +126,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 
 				if playerCount == updated.MaxPlayers || time.Since(lastPlayerJoinedAt) >= w.getMinReadyDuration() {
 					// Lobby is ready to start, send request to Game Router Service
-					w.logger.Debug("LOBBY IS READY TO START", zap.String("ID", updated.ID))
+					// w.logger.Debug("LOBBY IS READY TO START", zap.String("ID", updated.ID))
 
 					if err = w.store.MarkLobbyAsFull(ctx, updated.ID, updated.Mode); err != nil {
 						w.logger.Warn("Failed to mark lobby as full", zap.String("id", updated.ID), zap.Error(err))

@@ -1,55 +1,57 @@
 package modules
 
 import (
-	"github.com/brianvoe/gofakeit/v7"
+	"github.com/google/uuid"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 )
 
-var (
-	modes = []string{
-		"classic",
-		"battle",
-		"1v1",
-		"mega",
-	}
-)
-
-func prepare(_ *testing.T, _ *config.TestConfig) map[string]player {
-	_ = gofakeit.Seed(rand.Int())
-
-	playersCount := 10_000
-	players := make(map[string]player, playersCount)
-
-	for i := 0; i < playersCount; i++ {
-		categoriesAmount := rand.IntN(10)
-		if categoriesAmount <= 2 {
-			categoriesAmount += 4
-		}
-
-		var categories = make([]int32, categoriesAmount)
-		for j := 0; j < categoriesAmount; j++ {
-			categories[j] = rand.Int32N(25)
-		}
-
-		id := gofakeit.UUID()
-
-		players[id] = player{
-			id:         id,
-			categories: categories,
-			rating:     rand.Int32N(5000),
-			mode:       modes[gofakeit.IntN(len(modes))],
-		}
-	}
-
-	return players
-}
-
 type player struct {
 	id         string
 	rating     int32
 	categories []int32
 	mode       string
+}
+
+func generator(_ *testing.T, cfg *config.TestConfig) <-chan player {
+	var out chan player
+
+	if cfg.Generator.PlayersCount > 10_000 {
+		out = make(chan player, cfg.Generator.PlayersCount/100)
+	} else {
+		out = make(chan player, 50)
+	}
+
+	go func() {
+		for i := 0; i < cfg.Generator.PlayersCount; i++ {
+			out <- generatePlayer(cfg.Generator)
+		}
+
+		close(out)
+	}()
+
+	return out
+}
+
+func generatePlayer(cfg *config.Generator) player {
+	categoriesAmount := rand.IntN(cfg.CategoriesMax + 1)
+	if categoriesAmount <= 2 {
+		categoriesAmount += 4
+	}
+
+	var categories = make([]int32, categoriesAmount)
+	for j := 0; j < categoriesAmount; j++ {
+		categories[j] = rand.Int32N(cfg.CategoryMaxID + 1)
+	}
+
+	p := player{
+		id:         uuid.NewString(),
+		categories: categories,
+		rating:     rand.Int32N(cfg.MaxRating + 1),
+		mode:       cfg.Modes[rand.IntN(len(cfg.Modes))],
+	}
+
+	return p
 }

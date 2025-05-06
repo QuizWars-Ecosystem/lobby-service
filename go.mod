@@ -4,8 +4,7 @@ go 1.24.2
 
 require (
 	github.com/DavidMovas/gopherbox v0.0.0-20250329141646-145b4e0827ef
-	github.com/QuizWars-Ecosystem/go-common v0.0.0-20250506045002-c92b538a6f67
-	github.com/brianvoe/gofakeit/v7 v7.2.1
+	github.com/QuizWars-Ecosystem/go-common v0.0.0-20250506180212-dfe23e8c9f8b
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0

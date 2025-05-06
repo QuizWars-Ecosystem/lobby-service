@@ -10,9 +10,6 @@ import (
 )
 
 func (r *Result) LogStatsHTML() {
-	r.Lock()
-	defer r.Unlock()
-
 	file, err := os.Create(fmt.Sprintf("../reports/lobby_stats_%s.html", time.Now().Format("2006-01-02-1504")))
 	if err != nil {
 		panic(err)
@@ -73,16 +70,12 @@ func (r *Result) LogStatsHTML() {
 	<h1>Lobby Statistics</h1>`)
 
 	// ===== Summary Table =====
-	playersInLobbies := 0
-	var lobbiesCount int
-	r.Lobbies.Range(func(_, value interface{}) bool {
-		stat := value.(*LobbyStat)
-		stat.Lock()
-		playersInLobbies += stat.Players
-		stat.Unlock()
+	var playersInLobbies, lobbiesCount int32
+
+	for _, lobby := range r.lobbies {
+		playersInLobbies += lobby.players
 		lobbiesCount++
-		return true
-	})
+	}
 
 	htmlBuilder.WriteString("<h2>📊 Summary</h2><table><tr><th>Metric</th><th>Value</th></tr>")
 
@@ -96,20 +89,22 @@ func (r *Result) LogStatsHTML() {
 		"❌ Errored Lobbies",
 		"❌ Errored Players",
 		"👥 Players in Lobbies",
+		"⌛️ Requesting Duration",
 		"⌛️ Test Duration",
 	}
 
 	summaryValues := []string{
-		fmt.Sprint(r.TotalPlayers),
+		fmt.Sprint(r.totalPlayers),
 		fmt.Sprint(lobbiesCount),
-		fmt.Sprint(countAsyncMap(&r.Starter)),
-		fmt.Sprint(countAsyncMap(&r.WaitedPlayers)),
-		fmt.Sprint(countAsyncMap(&r.Expired)),
-		fmt.Sprint(countAsyncMap(&r.ExpiredPlayers)),
-		fmt.Sprint(countAsyncMap(&r.Errored)),
-		fmt.Sprint(countAsyncMap(&r.ErroredPlayers)),
-		fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100),
-		fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String()),
+		fmt.Sprint(len(r.starter)),
+		fmt.Sprint(len(r.waitedPlayers)),
+		fmt.Sprint(len(r.expired)),
+		fmt.Sprint(len(r.expiredPlayers)),
+		fmt.Sprint(len(r.errored)),
+		fmt.Sprint(len(r.erroredPlayers)),
+		fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.totalPlayers)*100),
+		fmt.Sprintf(r.finishRequesting.Sub(r.startedAt).Truncate(time.Second).String()),
+		fmt.Sprintf(r.finishedAt.Sub(r.startedAt).Truncate(time.Second).String()),
 	}
 
 	for i := range summaryTitles {
@@ -119,24 +114,21 @@ func (r *Result) LogStatsHTML() {
 	htmlBuilder.WriteString("</table>")
 
 	// ===== Mode Table =====
-	var modeCount int
-	r.Modes.Range(func(_, _ interface{}) bool {
-		modeCount++
-		return true
-	})
+	var modeCount = len(r.modes)
 
 	if modeCount > 0 {
 		htmlBuilder.WriteString("<h2>🎮 Players per Mode</h2><table><tr><th onclick='toggleSort(this.parentNode.parentNode, 0)'>Mode</th><th onclick='toggleSort(this.parentNode.parentNode, 1)'>Players</th></tr>")
 
 		var modes []string
-		r.Modes.Range(func(key, value interface{}) bool {
-			modes = append(modes, key.(string))
-			return true
-		})
+
+		for mode := range r.modes {
+			modes = append(modes, mode)
+		}
+
 		sort.Strings(modes)
 
 		for _, mode := range modes {
-			if count, ok := r.Modes.Load(mode); ok {
+			if count, ok := r.modes[mode]; ok {
 				htmlBuilder.WriteString("<tr><td>" + mode + "</td><td>" + fmt.Sprint(count) + "</td></tr>")
 			}
 		}
@@ -144,33 +136,18 @@ func (r *Result) LogStatsHTML() {
 	}
 
 	// ===== Detailed per-mode Stats =====
-	type statRow struct {
-		id           string
-		mode         string
-		count        int
-		max          int
-		avgRating    float64
-		minRating    int32
-		maxRating    int32
-		commonCats   []int
-		uniqueCats   []int
-		waitDuration string
-		status       string
-	}
-
 	rowsByMode := make(map[string][]statRow)
 
-	r.Lobbies.Range(func(key, value interface{}) bool {
-		id := key.(string)
-		stat := value.(*LobbyStat)
-		stat.Lock()
-		defer stat.Unlock()
+	for id, lobby := range r.lobbies {
+		lobbiesCount++
+		playersInLobbies += lobby.players
 
 		// Rating stats
 		var sum int32
 		minInt := int32(math.MaxInt32)
 		maxInt := int32(math.MinInt32)
-		for _, rating := range stat.RatingSet {
+
+		for _, rating := range lobby.ratingSet {
 			sum += rating
 			if rating < minInt {
 				minInt = rating
@@ -179,51 +156,60 @@ func (r *Result) LogStatsHTML() {
 				maxInt = rating
 			}
 		}
+
 		avg := 0.0
-		if len(stat.RatingSet) > 0 {
-			avg = float64(sum) / float64(len(stat.RatingSet))
+		if len(lobby.ratingSet) > 0 {
+			avg = float64(sum) / float64(len(lobby.ratingSet))
 		}
 
 		// Categories
-		common := map[int32]bool{}
-		all := map[int32]bool{}
+		common := make(map[int32]struct{}, len(lobby.categoriesSet))
+		all := make(map[int32]struct{}, len(lobby.categoriesSet))
 		first := true
 
-		for _, cats := range stat.CategoriesSet {
-			playerCats := map[int32]bool{}
+		for _, cats := range lobby.categoriesSet {
+			playerCats := make(map[int32]struct{}, len(cats))
+
 			for _, c := range cats {
-				playerCats[c] = true
-				all[c] = true
+				playerCats[c] = struct{}{}
+				all[c] = struct{}{}
 			}
+
 			if first {
 				for c := range playerCats {
-					common[c] = true
+					common[c] = struct{}{}
 				}
 				first = false
 			} else {
 				for c := range common {
-					if !playerCats[c] {
+					if _, ok := playerCats[c]; !ok {
 						delete(common, c)
 					}
 				}
 			}
 		}
 
-		var commonSlice, uniqueSlice []int
+		var commonSlice = make([]int, len(common))
+		var uniqueSlice []int
+		var count int
+
 		for c := range common {
-			commonSlice = append(commonSlice, int(c))
+			commonSlice[count] = int(c)
+			count++
 		}
+
 		for c := range all {
-			if !common[c] {
+			if _, ok := common[c]; !ok {
 				uniqueSlice = append(uniqueSlice, int(c))
 			}
 		}
+
 		sort.Ints(commonSlice)
 		sort.Ints(uniqueSlice)
 
 		waitDur := "-"
-		if !stat.StartedAt.IsZero() && !stat.CreatedAt.IsZero() {
-			dur := stat.StartedAt.Sub(stat.CreatedAt)
+		if !lobby.startedAt.IsZero() && !lobby.createdAt.IsZero() {
+			dur := lobby.startedAt.Sub(lobby.createdAt)
 			if dur < time.Second {
 				waitDur = "<1s"
 			} else {
@@ -232,20 +218,20 @@ func (r *Result) LogStatsHTML() {
 		}
 
 		statusDef := "-"
-		switch stat.Status {
-		case StartedStatus:
+		switch lobby.status {
+		case startedStatus:
 			statusDef = "STARTED"
-		case ExpiredStatus:
+		case expiredStatus:
 			statusDef = "EXPIRED"
-		case ErroredStatus:
+		case erroredStatus:
 			statusDef = "ERROR"
 		}
 
 		row := statRow{
 			id:           id,
-			mode:         stat.Mode,
-			count:        stat.Players,
-			max:          stat.MaxPlayers,
+			mode:         lobby.mode,
+			count:        int(lobby.players),
+			max:          int(lobby.maxPlayers),
 			avgRating:    avg,
 			minRating:    minInt,
 			maxRating:    maxInt,
@@ -254,9 +240,9 @@ func (r *Result) LogStatsHTML() {
 			waitDuration: waitDur,
 			status:       statusDef,
 		}
-		rowsByMode[stat.Mode] = append(rowsByMode[stat.Mode], row)
-		return true
-	})
+
+		rowsByMode[lobby.mode] = append(rowsByMode[lobby.mode], row)
+	}
 
 	if len(rowsByMode) == 0 {
 		htmlBuilder.WriteString("<p><em>No active lobbies.</em></p>")

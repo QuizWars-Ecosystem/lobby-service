@@ -2,6 +2,7 @@ package modules
 
 import (
 	"context"
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/clients"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
 	"math/rand/v2"
 	"sync"
@@ -13,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *config.TestConfig) {
+func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.TestConfig) {
 	in := generator(t, cfg)
 	r := report.NewResult(cfg.Generator.PlayersCount)
 
@@ -34,7 +35,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 			time.AfterFunc(time.Minute*3, cancel)
 
-			stream, err := client.JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
+			stream, err := manager.GetClient().JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
 				PlayerId:    p.id,
 				Rating:      p.rating,
 				CategoryIds: p.categories,

@@ -131,7 +131,7 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 				for _, element = range res {
 					for j, val := range element.([]interface{}) {
 						if val == nil {
-							s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", ids[j]))
+							s.logger.Debug("Lobby key missing, scheduling removal", zap.String("id", ids[j]))
 							missingKeys = append(missingKeys, ids[j])
 							continue
 						}

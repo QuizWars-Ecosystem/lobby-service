@@ -58,9 +58,6 @@ func (m *Matcher) SelectBestLobby(lobbies []*models.Lobby, player *models.Player
 
 	var best *scoredLobby
 
-	m.mx.Lock()
-	defer m.mx.Unlock()
-
 	for _, l := range lobbies {
 		if l.MaxPlayers == 0 {
 			continue

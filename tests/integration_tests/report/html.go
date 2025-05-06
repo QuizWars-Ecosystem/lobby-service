@@ -6,7 +6,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -87,15 +86,6 @@ func (r *Result) LogStatsHTML() {
 
 	htmlBuilder.WriteString("<h2>📊 Summary</h2><table><tr><th>Metric</th><th>Value</th></tr>")
 
-	countMap := func(m *sync.Map) int {
-		count := 0
-		m.Range(func(_, _ interface{}) bool {
-			count++
-			return true
-		})
-		return count
-	}
-
 	summaryTitles := []string{
 		"👥 Total Players",
 		"🏟️ Total Lobbies",
@@ -112,12 +102,12 @@ func (r *Result) LogStatsHTML() {
 	summaryValues := []string{
 		fmt.Sprint(r.TotalPlayers),
 		fmt.Sprint(lobbiesCount),
-		fmt.Sprint(countMap(&r.Starter)),
-		fmt.Sprint(countMap(&r.WaitedPlayers)),
-		fmt.Sprint(countMap(&r.Expired)),
-		fmt.Sprint(countMap(&r.ExpiredPlayers)),
-		fmt.Sprint(countMap(&r.Errored)),
-		fmt.Sprint(countMap(&r.ErroredPlayers)),
+		fmt.Sprint(countAsyncMap(&r.Starter)),
+		fmt.Sprint(countAsyncMap(&r.WaitedPlayers)),
+		fmt.Sprint(countAsyncMap(&r.Expired)),
+		fmt.Sprint(countAsyncMap(&r.ExpiredPlayers)),
+		fmt.Sprint(countAsyncMap(&r.Errored)),
+		fmt.Sprint(countAsyncMap(&r.ErroredPlayers)),
 		fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100),
 		fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String()),
 	}

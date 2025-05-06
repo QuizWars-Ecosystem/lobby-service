@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -39,6 +38,10 @@ func (r *Result) LogStats() {
 		uniqueCats   []int
 		waitDuration string
 		status       string
+	}
+
+	if countAsyncMap(&r.Lobbies) > 250 {
+		r.Lobbies = *cutAsyncMap(&r.Lobbies, 1000)
 	}
 
 	rowsByMode := make(map[string][]statRow)
@@ -146,15 +149,6 @@ func (r *Result) LogStats() {
 		return true
 	})
 
-	countMap := func(m *sync.Map) int {
-		count := 0
-		m.Range(func(_, _ interface{}) bool {
-			count++
-			return true
-		})
-		return count
-	}
-
 	// ===== Summary table =====
 	summary := table.NewWriter()
 	summary.SetOutputMirror(os.Stdout)
@@ -163,12 +157,12 @@ func (r *Result) LogStats() {
 	summary.AppendRows([]table.Row{
 		{"👥 Total Players", r.TotalPlayers},
 		{"🏟️ Total Lobbies", lobbiesCount},
-		{"🚀 Started Lobbies", countMap(&r.Starter)},
-		{"🔁 Waited Players", countMap(&r.WaitedPlayers)},
-		{"⌛ Expired Lobbies", countMap(&r.Expired)},
-		{"⌛ Expired Players", countMap(&r.ExpiredPlayers)},
-		{"❌ Errored Lobbies", countMap(&r.Errored)},
-		{"❌ Errored Players", countMap(&r.ErroredPlayers)},
+		{"🚀 Started Lobbies", countAsyncMap(&r.Starter)},
+		{"🔁 Waited Players", countAsyncMap(&r.WaitedPlayers)},
+		{"⌛ Expired Lobbies", countAsyncMap(&r.Expired)},
+		{"⌛ Expired Players", countAsyncMap(&r.ExpiredPlayers)},
+		{"❌ Errored Lobbies", countAsyncMap(&r.Errored)},
+		{"❌ Errored Players", countAsyncMap(&r.ErroredPlayers)},
 		{"👥 Players in Lobbies", fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100)},
 		{"⌛️ Test Duration", fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String())},
 	})

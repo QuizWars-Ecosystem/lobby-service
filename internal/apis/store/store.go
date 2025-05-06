@@ -15,6 +15,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ErrLobbyFull = errors.New("lobby is full")
+)
+
 const (
 	lobbyKey       = "lobby:{%s}"
 	activeLobbyKey = "lobby:active:{%s}"
@@ -166,7 +170,7 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *models.Player) error {
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
-	return s.withRedisLock(ctx, lockKey, 3*time.Second, func() error {
+	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
 		key := fmt.Sprintf(lobbyKey, lobbyID)
 
 		data, err := s.db.Get(ctx, key).Result()
@@ -183,7 +187,7 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 
 		if len(l.Players) >= l.MaxPlayers {
 			_ = s.db.ZRem(ctx, fmt.Sprintf(activeLobbyKey, l.Mode), lobbyID)
-			return apperrors.BadRequest(errors.New("lobby is full"))
+			return ErrLobbyFull
 		}
 
 		l.Players = append(l.Players, player)
@@ -214,7 +218,7 @@ func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *mo
 func (s *Store) UpdateLobbyTTL(ctx context.Context, lobbyID string, ttl time.Duration) error {
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
-	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+	return s.withRedisLock(ctx, lockKey, time.Second, func() error {
 		return s.db.Expire(ctx, fmt.Sprintf(lobbyKey, lobbyID), ttl).Err()
 	})
 }
@@ -238,7 +242,7 @@ func (s *Store) GetLobby(ctx context.Context, lobbyID string) (*models.Lobby, er
 func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID, mode string) error {
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
-	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+	return s.withRedisLock(ctx, lockKey, time.Second, func() error {
 		return s.removeLobby(ctx, lobbyID, mode)
 	})
 }
@@ -246,7 +250,7 @@ func (s *Store) MarkLobbyAsFull(ctx context.Context, lobbyID, mode string) error
 func (s *Store) ExpireLobby(ctx context.Context, lobbyID, mode string) error {
 	lockKey := fmt.Sprintf(lockLobbyKey, lobbyID)
 
-	return s.withRedisLock(ctx, lockKey, time.Second*2, func() error {
+	return s.withRedisLock(ctx, lockKey, time.Second, func() error {
 		return s.removeLobby(ctx, lobbyID, mode)
 	})
 }

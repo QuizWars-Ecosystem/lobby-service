@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,12 +20,6 @@ import (
 
 var _ lobbyv1.LobbyServiceServer = (*Handler)(nil)
 
-type Config struct {
-	ModeStats        map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
-	LobbyTLL         time.Duration       `mapstructure:"lobby_tll" yaml:"lobby_tll" default:"4m"`
-	MaxLobbyAttempts int                 `mapstructure:"max_lobby_attempts" yaml:"max_lobby_attempts" default:"3"`
-}
-
 var _ abstractions.ConfigSubscriber[*Config] = (*Handler)(nil)
 
 type StatPair struct {
@@ -39,7 +33,7 @@ type Handler struct {
 	matcher  *matchmaking.Matcher
 	store    *store.Store
 	logger   *zap.Logger
-	mx       sync.Mutex
+	mx       sync.RWMutex
 	cfg      *Config
 }
 
@@ -72,47 +66,43 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 
 	mode := request.Mode
 
-	activeLobbies, err := h.store.GetActiveLobbies(ctx, mode)
-	if err != nil {
-		if err = stream.Send(&lobbyv1.LobbyStatus{
-			Status: lobbyv1.Status_STATUS_ERROR,
-		}); err != nil {
-			h.logger.Warn("Failed to send response", zap.String("player_id", request.PlayerId), zap.Error(err))
+	var l *models.Lobby
+
+	for attempt := 0; attempt < h.getMaxLobbyAttempts(); attempt++ {
+		activeLobbies, err := h.store.GetActiveLobbies(ctx, mode)
+		if err != nil {
+			h.sendErrorStatus(stream, request.PlayerId)
 			return err
 		}
-		return err
-	}
 
-	candidateLobbies := h.matcher.FilterLobbies(activeLobbies, player)
-	selectedLobby := h.matcher.SelectBestLobby(candidateLobbies, player)
+		candidateLobbies := h.matcher.FilterLobbies(activeLobbies, player)
+		selectedLobby := h.matcher.SelectBestLobby(candidateLobbies, player)
 
-	var l *models.Lobby
-	if selectedLobby != nil {
+		if selectedLobby == nil {
+			break
+		}
+
 		err = h.store.AddPlayerToLobby(ctx, selectedLobby.ID, player)
 		if err != nil {
-			h.logger.Warn("Failed to add player to lobby", zap.String("lobby_id", selectedLobby.ID), zap.Error(err))
-
-			if err = stream.Send(&lobbyv1.LobbyStatus{
-				Status: lobbyv1.Status_STATUS_ERROR,
-			}); err != nil {
-				h.logger.Warn("Failed to send response", zap.String("player_id", request.PlayerId), zap.Error(err))
-				return err
+			if errors.Is(err, store.ErrLobbyFull) {
+				continue
 			}
 
+			h.logger.Warn("Failed to add player to lobby", zap.String("lobby_id", selectedLobby.ID), zap.Error(err))
+			h.sendErrorStatus(stream, request.PlayerId)
 			return err
 		}
 
-		if err = h.store.UpdateLobbyTTL(ctx, selectedLobby.ID, time.Minute*2); err != nil {
+		if err = h.store.UpdateLobbyTTL(ctx, selectedLobby.ID, h.getLobbyTLL()); err != nil {
 			h.logger.Warn("Failed to update lobby TTL", zap.Error(err))
 		}
 
 		h.streamer.RegisterStreamWithSubscription(ctx, selectedLobby.ID, player.ID, stream)
-
-		// h.logger.Debug("PLAYER ADDED LOBBY", zap.String("player_id", request.PlayerId), zap.String("lobby_id", selectedLobby.ID))
-
 		l = selectedLobby
-	} else {
-		h.mx.Lock()
+		break
+	}
+
+	if l == nil {
 		newLobby := &models.Lobby{
 			ID:         uuid.New().String(),
 			Mode:       mode,
@@ -120,28 +110,21 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 			Players:    []*models.Player{player},
 			AvgRating:  player.Rating,
 			CreatedAt:  time.Now(),
-			ExpireAt:   time.Now().Add(h.cfg.LobbyTLL),
+			ExpireAt:   time.Now().Add(h.getLobbyTLL()),
 		}
-		h.mx.Unlock()
 
 		h.setLobbyBorders(newLobby)
 
-		if err = h.store.CreateLobby(ctx, newLobby, time.Minute*5); err != nil {
-			h.logger.Warn("Failed to create l", zap.Error(err))
-
-			if err = stream.Send(&lobbyv1.LobbyStatus{
-				Status: lobbyv1.Status_STATUS_ERROR,
-			}); err != nil {
-				h.logger.Warn("Failed to send response", zap.String("player_id", request.PlayerId), zap.Error(err))
-				return err
-			}
-
+		if err := h.store.CreateLobby(ctx, newLobby, h.getLobbyTLL()); err != nil {
+			h.logger.Warn("Failed to create lobby", zap.Error(err))
+			h.sendErrorStatus(stream, request.PlayerId)
 			return err
 		}
 
 		l = newLobby
 
-		lobbyCtx, cancel := context.WithTimeout(ctx, time.Minute*4)
+		lobbyCtx, cancel := context.WithTimeout(ctx, h.getLobbyTLL())
+
 		defer cancel()
 
 		go h.waiter.WaitForLobbyFill(lobbyCtx, l)
@@ -150,38 +133,19 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 	}
 
 	<-ctx.Done()
-
-	return nil
-}
-
-func (h *Handler) SectionKey() string {
-	return "HANDLER"
-}
-
-func (h *Handler) UpdateConfig(newCfg *Config) error {
-	h.mx.Lock()
-	defer h.mx.Unlock()
-
-	h.cfg = newCfg
 	return nil
 }
 
 func (h *Handler) setLobbyBorders(lobby *models.Lobby) {
-	h.mx.Lock()
-	pair, ok := h.cfg.ModeStats[lobby.Mode]
-	h.mx.Unlock()
-
-	if !ok {
-		h.logger.Error("Lobby mode not found in config", zap.String("mode", lobby.Mode))
-		lobby.MinPlayers = 4
-		lobby.MaxPlayers = 8
-		return
-	}
-
+	pair := h.getModeStats(lobby.Mode)
 	lobby.MinPlayers = pair.Min
 	lobby.MaxPlayers = pair.Max
 }
 
-func isLockError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "could not acquire lock")
+func (h *Handler) sendErrorStatus(stream grpc.ServerStreamingServer[lobbyv1.LobbyStatus], playerID string) {
+	if sendErr := stream.Send(&lobbyv1.LobbyStatus{
+		Status: lobbyv1.Status_STATUS_ERROR,
+	}); sendErr != nil {
+		h.logger.Warn("Failed to send error status", zap.String("player_id", playerID), zap.Error(sendErr))
+	}
 }

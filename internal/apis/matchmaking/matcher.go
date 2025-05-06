@@ -7,17 +7,10 @@ import (
 	"sync"
 )
 
-type Config struct {
-	CategoryWeight    float64 `mapstructure:"category_weight" default:"0.5"`
-	PlayersFillWeight float64 `mapstructure:"players_fill_weight" default:"0.3"`
-	RatingWeight      float64 `mapstructure:"rating_weight" default:"0.2"`
-	MaxExpectedRating int     `mapstructure:"max_expected_rating" default:"1000"`
-}
-
 var _ abstractions.ConfigSubscriber[*Config] = (*Matcher)(nil)
 
 type Matcher struct {
-	mx  sync.Mutex
+	mx  sync.RWMutex
 	cfg *Config
 }
 
@@ -30,9 +23,6 @@ func NewMatcher(cfg *Config) *Matcher {
 func (m *Matcher) FilterLobbies(lobbies []*models.Lobby, player *models.Player) []*models.Lobby {
 	var matches []*models.Lobby
 
-	m.mx.Lock()
-	defer m.mx.Unlock()
-
 	for _, l := range lobbies {
 		if l.MaxPlayers == 0 {
 			continue
@@ -41,7 +31,7 @@ func (m *Matcher) FilterLobbies(lobbies []*models.Lobby, player *models.Player) 
 		ratingDiff := math.Abs(float64(player.Rating - l.AvgRating))
 
 		// Border (ex 3x from MaxExpectedRating)
-		if ratingDiff > float64(m.cfg.MaxExpectedRating)*3 {
+		if ratingDiff > float64(m.getMaxExpectedRating())*3 {
 			continue
 		}
 
@@ -84,15 +74,13 @@ func (m *Matcher) SelectBestLobby(lobbies []*models.Lobby, player *models.Player
 
 		// Difference in rating
 		ratingDiff := math.Abs(float64(player.Rating - l.AvgRating))
-		ratingScore := 1.0 - ratingDiff/float64(m.cfg.MaxExpectedRating)
+		ratingScore := 1.0 - ratingDiff/float64(m.getMaxExpectedRating())
 		if ratingScore < 0 {
 			ratingScore = 0
 		}
 
 		// Total score
-		totalScore := m.cfg.CategoryWeight*categoryScore +
-			m.cfg.PlayersFillWeight*fillScore +
-			m.cfg.RatingWeight*ratingScore
+		totalScore := m.getCategoryWeight()*categoryScore + m.getPlayersFillWeight()*fillScore + m.getRatingWeight()*ratingScore
 
 		if best == nil || totalScore > best.score {
 			best = &scoredLobby{
@@ -107,18 +95,6 @@ func (m *Matcher) SelectBestLobby(lobbies []*models.Lobby, player *models.Player
 	}
 
 	return best.lobby
-}
-
-func (m *Matcher) SectionKey() string {
-	return "MATCHER"
-}
-
-func (m *Matcher) UpdateConfig(newCfg *Config) error {
-	m.mx.Lock()
-	defer m.mx.Unlock()
-
-	m.cfg = newCfg
-	return nil
 }
 
 func jaccardIndex(a, b []int32) float64 {

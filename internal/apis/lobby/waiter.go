@@ -13,20 +13,13 @@ import (
 	"go.uber.org/zap"
 )
 
-type Config struct {
-	TickerTimeout    time.Duration `mapstructure:"tickerTimeout" default:"1s"`
-	MaxLobbyWait     time.Duration `mapstructure:"maxLobbyWait" default:"1m"`
-	LobbyIdleExtend  time.Duration `mapstructure:"lobbyIdleExtend" default:"15s"`
-	MinReadyDuration time.Duration `mapstructure:"minReadyDuration" default:"10s"`
-}
-
 var _ abstractions.ConfigSubscriber[*Config] = (*Waiter)(nil)
 
 type Waiter struct {
 	store    *store.Store
 	streamer *streamer.StreamManager
 	logger   *zap.Logger
-	mx       sync.Mutex
+	mx       sync.RWMutex
 	cfg      *Config
 }
 
@@ -40,7 +33,7 @@ func NewWaiter(store *store.Store, streamer *streamer.StreamManager, logger *zap
 }
 
 func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
-	ticker := time.NewTicker(w.cfg.TickerTimeout)
+	ticker := time.NewTicker(w.getTickerTimeout())
 	defer ticker.Stop()
 
 	var prevPlayerCount int
@@ -69,7 +62,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 			)*/
 
 			// If players not come and max time waiting expired
-			if playerCount == 0 && time.Since(updated.CreatedAt) > w.cfg.MaxLobbyWait {
+			if playerCount == 0 && time.Since(updated.CreatedAt) > w.getMaxLobbyWait() {
 				if err = w.store.ExpireLobby(ctx, updated.ID, updated.Mode); err != nil {
 					w.logger.Warn("Failed to expire lobby", zap.String("id", updated.ID), zap.Error(err))
 				}
@@ -107,20 +100,20 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 				timeRemaining := time.Until(updated.ExpireAt)
 
 				// If there's not much time left, extend the expiration time
-				if timeRemaining < w.cfg.LobbyIdleExtend {
-					updated.ExpireAt = updated.ExpireAt.Add(w.cfg.LobbyIdleExtend)
+				if timeRemaining < w.getLobbyIdleExtend() {
+					updated.ExpireAt = updated.ExpireAt.Add(w.getLobbyIdleExtend())
 					// w.logger.Debug("New player joined, extending lobby wait", zap.Int("current", playerCount), zap.Int("previous", prevPlayerCount), zap.String("lobby_id", updated.ID))
 				}
 			}
 
 			// Has min amount of players — can wait more
-			if playerCount >= updated.MinPlayers && time.Since(updated.CreatedAt) < w.cfg.MaxLobbyWait {
+			if playerCount >= updated.MinPlayers && time.Since(updated.CreatedAt) < w.getMaxLobbyWait() {
 				// Calculate how much time remains before expiration
 				timeRemaining := time.Until(updated.ExpireAt)
 
 				// If there's not much time left, extend the expiration time
-				if timeRemaining < w.cfg.LobbyIdleExtend {
-					updated.ExpireAt = updated.ExpireAt.Add(w.cfg.LobbyIdleExtend)
+				if timeRemaining < w.getLobbyIdleExtend() {
+					updated.ExpireAt = updated.ExpireAt.Add(w.getLobbyIdleExtend())
 					// w.logger.Info("Min players reached, extending wait time", zap.String("lobby_id", updated.ID))
 				}
 			}
@@ -131,7 +124,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 				// Calculate the time since the last player joined, if it hasn't passed the minimum waiting time, continue waiting
 				lastPlayerJoinedAt := updated.LastJoinedAt // assuming we track the last player join time
 
-				if playerCount == updated.MaxPlayers || time.Since(lastPlayerJoinedAt) >= w.cfg.MinReadyDuration {
+				if playerCount == updated.MaxPlayers || time.Since(lastPlayerJoinedAt) >= w.getMinReadyDuration() {
 					// Lobby is ready to start, send request to Game Router Service
 					w.logger.Debug("LOBBY IS READY TO START", zap.String("ID", updated.ID))
 
@@ -188,17 +181,4 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 			return
 		}
 	}
-}
-
-func (w *Waiter) SectionKey() string {
-	return "LOBBY"
-}
-
-func (w *Waiter) UpdateConfig(newCfg *Config) error {
-	w.mx.Lock()
-	defer w.mx.Unlock()
-
-	w.cfg = newCfg
-
-	return nil
 }

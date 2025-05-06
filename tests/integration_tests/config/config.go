@@ -59,7 +59,7 @@ func NewTestConfig() *TestConfig {
 						Max: 64,
 					},
 				},
-				LobbyTLL:         time.Minute * 4,
+				LobbyTLL:         time.Minute * 5,
 				MaxLobbyAttempts: 3,
 			},
 			Lobby: &lobby.Config{

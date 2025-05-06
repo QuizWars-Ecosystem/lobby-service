@@ -4,30 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/redis/go-redis/v9"
-	"sync"
-	"time"
-
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"sync"
 )
 
 const (
-	updatesLobbyChannelKey = "lobby_updates:%s"
+	updatesLobbyChannelKey = "lobby.updates.%s"
 )
 
 type StreamManager struct {
-	redisClient   redis.UniversalClient
+	ns            *nats.Conn
 	mu            sync.RWMutex
 	localStreams  map[string]map[string]grpc.ServerStreamingServer[lobbyv1.LobbyStatus]
 	remoteStreams map[string]map[string]grpc.ServerStreamingServer[lobbyv1.LobbyStatus]
 	logger        *zap.Logger
 }
 
-func NewStreamManager(redisClient redis.UniversalClient, logger *zap.Logger) *StreamManager {
+func NewStreamManager(ns *nats.Conn, logger *zap.Logger) *StreamManager {
 	return &StreamManager{
-		redisClient:   redisClient,
+		ns:            ns,
 		localStreams:  make(map[string]map[string]grpc.ServerStreamingServer[lobbyv1.LobbyStatus]),
 		remoteStreams: make(map[string]map[string]grpc.ServerStreamingServer[lobbyv1.LobbyStatus]),
 		logger:        logger,
@@ -58,65 +56,47 @@ func (s *StreamManager) RegisterStreamWithSubscription(
 	s.remoteStreams[lobbyID][playerID] = stream
 	s.mu.Unlock()
 
-	ps := s.redisClient.Subscribe(ctx, fmt.Sprintf(updatesLobbyChannelKey, lobbyID))
+	subject := fmt.Sprintf(updatesLobbyChannelKey, lobbyID)
+
+	subscription, err := s.ns.Subscribe(subject, func(msg *nats.Msg) {
+		var status lobbyv1.LobbyStatus
+		if err := json.Unmarshal(msg.Data, &status); err != nil {
+			s.logger.Warn("Failed to unmarshal NATS message", zap.Error(err))
+			return
+		}
+
+		if err := stream.Send(&status); err != nil {
+			s.logger.Warn("Failed to send lobby status over stream", zap.String("player_id", playerID), zap.Error(err))
+			return
+		}
+	})
+
+	if err != nil {
+		s.logger.Error("Failed to subscribe to NATS channel", zap.String("subject", subject), zap.Error(err))
+		return
+	}
 
 	go func() {
-		defer func() {
-			_ = ps.Close()
-			s.mu.Lock()
-			delete(s.remoteStreams[lobbyID], playerID)
-			if len(s.remoteStreams[lobbyID]) == 0 {
-				delete(s.remoteStreams, lobbyID)
-			}
-			s.mu.Unlock()
-		}()
-
-		ch := ps.Channel()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case msg, ok := <-ch:
-				if !ok {
-					return
-				}
-
-				var status lobbyv1.LobbyStatus
-				if err := json.Unmarshal([]byte(msg.Payload), &status); err != nil {
-					s.logger.Warn("Failed to unmarshal channel message", zap.Error(err))
-					continue
-				}
-
-				/*s.logger.Debug("Got PubSub message",
-					zap.String("channel", msg.Channel),
-					zap.String("playerID", playerID),
-					zap.String("status", status.Status.String()),
-					zap.Int32("players", status.CurrentPlayers),
-				)*/
-
-				if err := stream.Send(&status); err != nil {
-					s.logger.Warn("Failed to send lobby status over stream", zap.String("player_id", playerID), zap.Error(err))
-					return
-				}
-			}
+		<-ctx.Done()
+		_ = subscription.Unsubscribe()
+		s.mu.Lock()
+		delete(s.remoteStreams[lobbyID], playerID)
+		if len(s.remoteStreams[lobbyID]) == 0 {
+			delete(s.remoteStreams, lobbyID)
 		}
+		s.mu.Unlock()
 	}()
 }
 
 func (s *StreamManager) PublishLobbyStatus(lobbyID string, status *lobbyv1.LobbyStatus) error {
-	channel := fmt.Sprintf(updatesLobbyChannelKey, lobbyID)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
+	subject := fmt.Sprintf(updatesLobbyChannelKey, lobbyID)
 	data, err := json.Marshal(status)
 	if err != nil {
 		s.logger.Error("Failed to marshal lobby status", zap.String("lobby_id", lobbyID), zap.Error(err))
 		return err
 	}
 
-	if err = s.redisClient.Publish(ctx, channel, data).Err(); err != nil {
+	if err = s.ns.Publish(subject, data); err != nil {
 		s.logger.Error("Failed to publish lobby status", zap.String("lobby_id", lobbyID), zap.Error(err))
 		return err
 	}

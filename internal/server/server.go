@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"time"
-
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/streamer"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
+	"net"
+	"net/http"
 
 	"github.com/QuizWars-Ecosystem/go-common/pkg/grpcx/telemetry"
 	grpcrecovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -78,24 +76,27 @@ func NewServer(ctx context.Context, manager *manager.Manager[config.Config]) (*S
 
 	cl.PushCtx(provider.Shutdown)
 
-	redisClient, err := clients.NewRedisClient(cfg.Redis.URL,
-		clients.NewRedisOptions(cfg.Redis.URL).
-			WithDialTimeout(time.Second*15).
-			WithMaxActiveConns(100).
-			WithWriteTimeout(time.Millisecond*500).
-			WithReadTimeout(time.Millisecond*500).
-			WithConnMaxIdleTimeout(time.Second*20).
-			WithPoolSize(5000).
-			WithTraceProvider(provider),
+	redisClient, err := clients.NewRedisClusterClient(
+		clients.NewRedisClusterOptions(cfg.Redis.URLs),
 	)
 	if err != nil {
 		logger.Zap().Error("error initializing redis client", zap.Error(err))
 		return nil, fmt.Errorf("error initializing redis client: %w", err)
 	}
 
+	cl.PushIO(redisClient)
+
+	ns, err := clients.NewNATSClient(clients.DefaultNATSOptions.WithURL(cfg.NATS.URL), logger.Zap())
+	if err != nil {
+		logger.Zap().Error("error initializing nats client", zap.Error(err))
+		return nil, fmt.Errorf("error initializing nats client: %w", err)
+	}
+
+	cl.PushNE(ns.Close)
+
 	grpcprometheus.EnableHandlingTimeHistogram()
 
-	streamManager := streamer.NewStreamManager(redisClient, logger.Zap())
+	streamManager := streamer.NewStreamManager(ns, logger.Zap())
 	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	storage := store.NewStore(redisClient, logger.Zap())
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)

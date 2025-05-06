@@ -12,11 +12,16 @@ type Config struct {
 	*config.ServiceConfig `mapstructure:"service"`
 	Logger                *log.Config         `mapstructure:"logger"`
 	Redis                 *RedisConfig        `mapstructure:"redis"`
+	NATS                  *NATSConfig         `mapstructure:"nats"`
 	Lobby                 *lobby.Config       `mapstructure:"lobby"`
 	Handler               *handler.Config     `mapstructure:"handler"`
 	Matcher               *matchmaking.Config `mapstructure:"matcher"`
 }
 
 type RedisConfig struct {
+	URLs []string `mapstructure:"urls"`
+}
+
+type NATSConfig struct {
 	URL string `mapstructure:"url"`
 }

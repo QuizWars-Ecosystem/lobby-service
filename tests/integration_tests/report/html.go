@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,11 +75,26 @@ func (r *Result) LogStatsHTML() {
 
 	// ===== Summary Table =====
 	playersInLobbies := 0
-	for _, stat := range r.Lobbies {
+	var lobbiesCount int
+	r.Lobbies.Range(func(_, value interface{}) bool {
+		stat := value.(*LobbyStat)
+		stat.Lock()
 		playersInLobbies += stat.Players
-	}
+		stat.Unlock()
+		lobbiesCount++
+		return true
+	})
 
 	htmlBuilder.WriteString("<h2>📊 Summary</h2><table><tr><th>Metric</th><th>Value</th></tr>")
+
+	countMap := func(m *sync.Map) int {
+		count := 0
+		m.Range(func(_, _ interface{}) bool {
+			count++
+			return true
+		})
+		return count
+	}
 
 	summaryTitles := []string{
 		"👥 Total Players",
@@ -90,18 +106,20 @@ func (r *Result) LogStatsHTML() {
 		"❌ Errored Lobbies",
 		"❌ Errored Players",
 		"👥 Players in Lobbies",
+		"⌛️ Test Duration",
 	}
 
 	summaryValues := []string{
 		fmt.Sprint(r.TotalPlayers),
-		fmt.Sprint(len(r.Lobbies)),
-		fmt.Sprint(len(r.Starter)),
-		fmt.Sprint(len(r.WaitedPlayers)),
-		fmt.Sprint(len(r.Expired)),
-		fmt.Sprint(len(r.ExpiredPlayers)),
-		fmt.Sprint(len(r.Errored)),
-		fmt.Sprint(len(r.ErroredPlayers)),
+		fmt.Sprint(lobbiesCount),
+		fmt.Sprint(countMap(&r.Starter)),
+		fmt.Sprint(countMap(&r.WaitedPlayers)),
+		fmt.Sprint(countMap(&r.Expired)),
+		fmt.Sprint(countMap(&r.ExpiredPlayers)),
+		fmt.Sprint(countMap(&r.Errored)),
+		fmt.Sprint(countMap(&r.ErroredPlayers)),
 		fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100),
+		fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String()),
 	}
 
 	for i := range summaryTitles {
@@ -111,10 +129,26 @@ func (r *Result) LogStatsHTML() {
 	htmlBuilder.WriteString("</table>")
 
 	// ===== Mode Table =====
-	if len(r.Modes) > 0 {
+	var modeCount int
+	r.Modes.Range(func(_, _ interface{}) bool {
+		modeCount++
+		return true
+	})
+
+	if modeCount > 0 {
 		htmlBuilder.WriteString("<h2>🎮 Players per Mode</h2><table><tr><th onclick='toggleSort(this.parentNode.parentNode, 0)'>Mode</th><th onclick='toggleSort(this.parentNode.parentNode, 1)'>Players</th></tr>")
-		for _, mode := range sortedKeys(r.Modes) {
-			htmlBuilder.WriteString("<tr><td>" + mode + "</td><td>" + fmt.Sprint(r.Modes[mode]) + "</td></tr>")
+
+		var modes []string
+		r.Modes.Range(func(key, value interface{}) bool {
+			modes = append(modes, key.(string))
+			return true
+		})
+		sort.Strings(modes)
+
+		for _, mode := range modes {
+			if count, ok := r.Modes.Load(mode); ok {
+				htmlBuilder.WriteString("<tr><td>" + mode + "</td><td>" + fmt.Sprint(count) + "</td></tr>")
+			}
 		}
 		htmlBuilder.WriteString("</table>")
 	}
@@ -136,7 +170,12 @@ func (r *Result) LogStatsHTML() {
 
 	rowsByMode := make(map[string][]statRow)
 
-	for id, stat := range r.Lobbies {
+	r.Lobbies.Range(func(key, value interface{}) bool {
+		id := key.(string)
+		stat := value.(*LobbyStat)
+		stat.Lock()
+		defer stat.Unlock()
+
 		// Rating stats
 		var sum int32
 		minInt := int32(math.MaxInt32)
@@ -195,7 +234,11 @@ func (r *Result) LogStatsHTML() {
 		waitDur := "-"
 		if !stat.StartedAt.IsZero() && !stat.CreatedAt.IsZero() {
 			dur := stat.StartedAt.Sub(stat.CreatedAt)
-			waitDur = dur.Truncate(time.Second).String()
+			if dur < time.Second {
+				waitDur = "<1s"
+			} else {
+				waitDur = dur.Truncate(time.Second).String()
+			}
 		}
 
 		statusDef := "-"
@@ -222,7 +265,8 @@ func (r *Result) LogStatsHTML() {
 			status:       statusDef,
 		}
 		rowsByMode[stat.Mode] = append(rowsByMode[stat.Mode], row)
-	}
+		return true
+	})
 
 	if len(rowsByMode) == 0 {
 		htmlBuilder.WriteString("<p><em>No active lobbies.</em></p>")

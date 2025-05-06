@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"sync"
 	"time"
 
 	apperrors "github.com/QuizWars-Ecosystem/go-common/pkg/error"
@@ -15,9 +16,9 @@ import (
 )
 
 const (
-	lobbyKey       = "lobby:%s"
-	activeLobbyKey = "lobby:active:%s"
-	lockLobbyKey   = "lock:lobby:%s"
+	lobbyKey       = "lobby:{%s}"
+	activeLobbyKey = "lobby:active:{%s}"
+	lockLobbyKey   = "lock:lobby:{%s}"
 )
 
 type Store struct {
@@ -80,49 +81,86 @@ func (s *Store) GetActiveLobbies(ctx context.Context, mode string) ([]*models.Lo
 		keys[i] = fmt.Sprintf(lobbyKey, id)
 	}
 
-	values, err := s.db.MGet(ctx, keys...).Result()
-	if err != nil {
-		s.logger.Error("Failed to batch fetch lobbies", zap.Error(err))
+	slotMap := make(map[int64][]string)
+	for _, key := range keys {
+		var slot int64
+		slot, err = s.db.ClusterKeySlot(ctx, key).Result()
+		if err != nil {
+			s.logger.Error("Failed to get slot for key", zap.String("key", key), zap.Error(err))
+			return nil, err
+		}
+		slotMap[slot] = append(slotMap[slot], key)
+	}
+
+	var wg sync.WaitGroup
+	resultCh := make(chan map[string]interface{}, len(slotMap))
+	errCh := make(chan error, 1)
+	var values []any
+
+	for slot, keysInSlot := range slotMap {
+		wg.Add(1)
+		go func(slot int64, keysInSlot []string) {
+			defer wg.Done()
+			values, err = s.db.MGet(ctx, keysInSlot...).Result()
+			if err != nil {
+				errCh <- fmt.Errorf("MGet failed for slot %d: %v", slot, err)
+				return
+			}
+			resultCh <- map[string]interface{}{fmt.Sprintf("slot_%d", slot): values}
+		}(slot, keysInSlot)
+	}
+
+	wg.Wait()
+
+	select {
+	case err = <-errCh:
+		s.logger.Error("Error during parallel MGet execution", zap.Error(err))
 		return nil, err
+	default:
+		var lobbies []*models.Lobby
+		var missingKeys []string
+		var element any
+
+		for i := 0; i < len(slotMap); i++ {
+			select {
+			case res := <-resultCh:
+				for _, element = range res {
+					for j, val := range element.([]interface{}) {
+						if val == nil {
+							s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", ids[j]))
+							missingKeys = append(missingKeys, ids[j])
+							continue
+						}
+
+						var l models.Lobby
+						if err = json.Unmarshal([]byte(val.(string)), &l); err != nil {
+							s.logger.Error("Failed to unmarshal lobby", zap.String("id", ids[j]), zap.Error(err))
+							continue
+						}
+
+						if len(l.Players) >= l.MaxPlayers {
+							continue
+						}
+
+						lobbies = append(lobbies, &l)
+					}
+				}
+			}
+		}
+
+		if len(missingKeys) > 0 {
+			members := make([]interface{}, len(missingKeys))
+			for i, id := range missingKeys {
+				members[i] = id
+			}
+
+			if _, err = s.db.ZRem(ctx, zsetKey, members...).Result(); err != nil {
+				s.logger.Warn("Failed to clean up broken lobby references", zap.Error(err))
+			}
+		}
+
+		return lobbies, nil
 	}
-
-	var (
-		lobbies     []*models.Lobby
-		missingKeys []string
-	)
-
-	for i, val := range values {
-		if val == nil {
-			s.logger.Info("Lobby key missing, scheduling removal", zap.String("id", ids[i]))
-			missingKeys = append(missingKeys, ids[i])
-			continue
-		}
-
-		var l models.Lobby
-		if err = json.Unmarshal([]byte(val.(string)), &l); err != nil {
-			s.logger.Error("Failed to unmarshal lobby", zap.String("id", ids[i]), zap.Error(err))
-			continue
-		}
-
-		if len(l.Players) >= l.MaxPlayers {
-			continue
-		}
-
-		lobbies = append(lobbies, &l)
-	}
-
-	if len(missingKeys) > 0 {
-		members := make([]interface{}, len(missingKeys))
-		for i, id := range missingKeys {
-			members[i] = id
-		}
-
-		if _, err = s.db.ZRem(ctx, zsetKey, members...).Result(); err != nil {
-			s.logger.Warn("Failed to clean up broken lobby references", zap.Error(err))
-		}
-	}
-
-	return lobbies, nil
 }
 
 func (s *Store) AddPlayerToLobby(ctx context.Context, lobbyID string, player *models.Player) error {

@@ -17,11 +17,11 @@ var (
 	}
 )
 
-func prepare(_ *testing.T, _ *config.TestConfig) []player {
+func prepare(_ *testing.T, _ *config.TestConfig) map[string]player {
 	_ = gofakeit.Seed(rand.Int())
 
-	playersCount := 1000
-	players := make([]player, playersCount)
+	playersCount := 10_000
+	players := make(map[string]player, playersCount)
 
 	for i := 0; i < playersCount; i++ {
 		categoriesAmount := rand.IntN(10)
@@ -34,8 +34,10 @@ func prepare(_ *testing.T, _ *config.TestConfig) []player {
 			categories[j] = rand.Int32N(25)
 		}
 
-		players[i] = player{
-			id:         gofakeit.UUID(),
+		id := gofakeit.UUID()
+
+		players[id] = player{
+			id:         id,
 			categories: categories,
 			rating:     rand.Int32N(5000),
 			mode:       modes[gofakeit.IntN(len(modes))],

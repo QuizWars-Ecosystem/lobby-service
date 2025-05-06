@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,8 +43,15 @@ func (r *Result) LogStats() {
 
 	rowsByMode := make(map[string][]statRow)
 	var playersInLobbies int
+	var lobbiesCount int
 
-	for id, stat := range r.Lobbies {
+	r.Lobbies.Range(func(key, value interface{}) bool {
+		id := key.(string)
+		stat := value.(*LobbyStat)
+		stat.Lock()
+		defer stat.Unlock()
+
+		lobbiesCount++
 		playersInLobbies += stat.Players
 
 		// Rating stats
@@ -104,7 +112,11 @@ func (r *Result) LogStats() {
 		waitDur := "-"
 		if !stat.StartedAt.IsZero() && !stat.CreatedAt.IsZero() {
 			dur := stat.StartedAt.Sub(stat.CreatedAt)
-			waitDur = dur.Truncate(time.Second).String()
+			if dur < time.Second {
+				waitDur = "<1s"
+			} else {
+				waitDur = dur.Truncate(time.Second).String()
+			}
 		}
 
 		statusDef := "-"
@@ -131,6 +143,16 @@ func (r *Result) LogStats() {
 			status:       statusDef,
 		}
 		rowsByMode[stat.Mode] = append(rowsByMode[stat.Mode], row)
+		return true
+	})
+
+	countMap := func(m *sync.Map) int {
+		count := 0
+		m.Range(func(_, _ interface{}) bool {
+			count++
+			return true
+		})
+		return count
 	}
 
 	// ===== Summary table =====
@@ -140,32 +162,44 @@ func (r *Result) LogStats() {
 	summary.AppendHeader(table.Row{"📊 Metric", "📈 Value"})
 	summary.AppendRows([]table.Row{
 		{"👥 Total Players", r.TotalPlayers},
-		{"🏟️ Total Lobbies", len(r.Lobbies)},
-		{"🚀 Started Lobbies", len(r.Starter)},
-		{"🔁 Waited Players", len(r.WaitedPlayers)},
-		{"⌛ Expired Lobbies", len(r.Expired)},
-		{"⌛ Expired Players", len(r.ExpiredPlayers)},
-		{"❌ Errored Lobbies", len(r.Errored)},
-		{"❌ Errored Players", len(r.ErroredPlayers)},
+		{"🏟️ Total Lobbies", lobbiesCount},
+		{"🚀 Started Lobbies", countMap(&r.Starter)},
+		{"🔁 Waited Players", countMap(&r.WaitedPlayers)},
+		{"⌛ Expired Lobbies", countMap(&r.Expired)},
+		{"⌛ Expired Players", countMap(&r.ExpiredPlayers)},
+		{"❌ Errored Lobbies", countMap(&r.Errored)},
+		{"❌ Errored Players", countMap(&r.ErroredPlayers)},
 		{"👥 Players in Lobbies", fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100)},
+		{"⌛️ Test Duration", fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String())},
 	})
 	summary.Render()
 	fmt.Println()
 
 	// ===== Mode distribution table =====
-	if len(r.Modes) > 0 {
+	modeCount := 0
+	r.Modes.Range(func(_, _ interface{}) bool {
+		modeCount++
+		return true
+	})
+
+	if modeCount > 0 {
 		modeTbl := table.NewWriter()
 		modeTbl.SetOutputMirror(os.Stdout)
 		modeTbl.SetTitle("🎮 Players per Mode")
 		modeTbl.AppendHeader(table.Row{"Mode", "Players"})
 		modeTbl.SetStyle(table.StyleLight)
-		var keys []string
-		for k := range r.Modes {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			modeTbl.AppendRow([]interface{}{k, r.Modes[k]})
+
+		var modes []string
+		r.Modes.Range(func(key, value interface{}) bool {
+			modes = append(modes, key.(string))
+			return true
+		})
+		sort.Strings(modes)
+
+		for _, mode := range modes {
+			if count, ok := r.Modes.Load(mode); ok {
+				modeTbl.AppendRow([]interface{}{mode, count})
+			}
 		}
 		modeTbl.Render()
 		fmt.Println()
@@ -180,8 +214,6 @@ func (r *Result) LogStats() {
 	red := color.New(color.FgRed).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
-
-	//
 
 	for _, mode := range sortedKeys(rowsByMode) {
 		fmt.Printf("🎮 Mode: %s\n", mode)

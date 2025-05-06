@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/DavidMovas/gopherbox v0.0.0-20250329141646-145b4e0827ef
-	github.com/QuizWars-Ecosystem/go-common v0.0.0-20250505220004-03afd467e387
+	github.com/QuizWars-Ecosystem/go-common v0.0.0-20250506045002-c92b538a6f67
 	github.com/brianvoe/gofakeit/v7 v7.2.1
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
@@ -12,6 +12,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/jedib0t/go-pretty/v6 v6.6.7
+	github.com/nats-io/nats.go v1.42.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/stretchr/testify v1.10.0
@@ -77,6 +78,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/mdelapenya/tlscert v0.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -87,6 +89,8 @@ require (
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/nats-io/nkeys v0.4.11 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
@@ -111,8 +115,9 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/consul v0.36.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.36.0 // indirect
+	github.com/testcontainers/testcontainers-go/modules/nats v0.37.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.36.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/redis v0.36.0 // indirect
+	github.com/testcontainers/testcontainers-go/modules/redis v0.37.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect

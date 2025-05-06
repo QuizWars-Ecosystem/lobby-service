@@ -16,12 +16,13 @@ import (
 
 type TestConfig struct {
 	ServiceConfig *config.Config
-	Redis         *test.RedisConfig
+	Redis         *test.RedisClusterConfig
+	NATS          *test.NatsConfig
 }
 
 func NewTestConfig() *TestConfig {
-	redisCfg := test.DefaultRedisConfig()
-	redisCfg.Ports = []int{6386}
+	redisClusterCfg := test.DefaultRedisClusterConfig()
+	natsCfg := test.DefaultNatsConfig()
 
 	return &TestConfig{
 		ServiceConfig: &config.Config{
@@ -29,7 +30,7 @@ func NewTestConfig() *TestConfig {
 				Name:         "lobby-service",
 				Address:      "lobby_address",
 				Local:        true,
-				GRPCPort:     50055,
+				GRPCPort:     50051,
 				StartTimeout: time.Second * 30,
 				StopTimeout:  time.Second * 30,
 				ConsulURL:    "consul:8500",
@@ -38,6 +39,7 @@ func NewTestConfig() *TestConfig {
 				Level: "debug",
 			},
 			Redis: &config.RedisConfig{},
+			NATS:  &config.NATSConfig{},
 			Handler: &handler.Config{
 				ModeStats: map[string]handler.StatPair{
 					"classic": {
@@ -57,22 +59,23 @@ func NewTestConfig() *TestConfig {
 						Max: 64,
 					},
 				},
-				LobbyTLL:         time.Minute,
+				LobbyTLL:         time.Minute * 4,
 				MaxLobbyAttempts: 3,
 			},
 			Lobby: &lobby.Config{
 				TickerTimeout:    time.Second,
 				MaxLobbyWait:     time.Minute,
-				LobbyIdleExtend:  time.Second * 20,
-				MinReadyDuration: time.Second * 20,
+				LobbyIdleExtend:  time.Second * 15,
+				MinReadyDuration: time.Second * 10,
 			},
 			Matcher: &matchmaking.Config{
 				CategoryWeight:    0.5,
 				PlayersFillWeight: 0.3,
 				RatingWeight:      0.2,
-				MaxExpectedRating: 1000,
+				MaxExpectedRating: 1500,
 			},
 		},
-		Redis: &redisCfg,
+		Redis: &redisClusterCfg,
+		NATS:  &natsCfg,
 	}
 }

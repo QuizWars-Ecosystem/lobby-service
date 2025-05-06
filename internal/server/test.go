@@ -4,24 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/streamer"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
-	"net"
-	"strings"
-
 	"github.com/DavidMovas/gopherbox/pkg/closer"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/clients"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/log"
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/streamer"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/config"
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"net"
+	"strings"
+	"time"
 )
 
 type TestServer struct {
@@ -39,7 +39,16 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 	cl.PushIO(logger)
 
 	redisClient, err := clients.NewRedisClusterClient(
-		clients.NewRedisClusterOptions(cfg.Redis.URLs),
+		clients.NewRedisClusterOptions(cfg.Redis.URLs).
+			WithDialTimeout(10*time.Second).
+			WithMaxRetries(5).
+			WithPoolSize(2000).
+			WithMinIdleConns(500).
+			WithPoolTimeout(2*time.Second).
+			WithReadTimeout(1*time.Second).
+			WithWriteTimeout(1*time.Second).
+			WithRouterByLatency(true).
+			WithBackoffTimeouts(100*time.Millisecond, time.Second),
 	)
 	if err != nil {
 		logger.Zap().Error("error initializing redis client", zap.Error(err))

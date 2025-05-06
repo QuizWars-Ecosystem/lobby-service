@@ -46,6 +46,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 			require.NoError(t, err)
 
+			wg.Add(1)
 			go watchStream(p, stream, r, wg, cancel)
 
 			diff := rand.IntN(50)
@@ -60,72 +61,87 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyStatus], r *report.Result, wg *sync.WaitGroup, cancelFn func()) {
 	ctx := stream.Context()
-	wg.Add(1)
+	done := make(chan struct{})
 
-	defer func() {
-		_ = stream.CloseSend()
-		cancelFn()
-		wg.Done()
-	}()
+	go func() {
+		defer func() {
+			_ = stream.CloseSend()
+			cancelFn()
+			wg.Done()
+			close(done)
+		}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		res, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			default:
 			}
-			slog.Error("failed to receive response", err)
-			return
-		}
 
-		if res == nil {
-			continue
-		}
+			resCh := make(chan *lobbyv1.LobbyStatus, 1)
+			errCh := make(chan error, 1)
 
-		lobby := r.GetOrCreateLobby(res.LobbyId, func() *report.LobbyStat {
-			return &report.LobbyStat{
-				Mode:          player.mode,
-				Players:       int(res.CurrentPlayers),
-				MaxPlayers:    int(res.MaxPlayers),
-				RatingSet:     map[string]int32{player.id: player.rating},
-				CategoriesSet: map[string][]int32{player.id: player.categories},
-				CreatedAt:     time.Now(),
+			go func() {
+				res, err := stream.Recv()
+				if err != nil {
+					errCh <- err
+					return
+				}
+				resCh <- res
+			}()
+
+			select {
+			case <-ctx.Done():
+				return
+
+			case err := <-errCh:
+				if errors.Is(err, io.EOF) ||
+					errors.Is(err, context.DeadlineExceeded) ||
+					status.Code(err) == codes.DeadlineExceeded {
+					return
+				}
+				slog.Error("failed to receive response", err)
+				return
+
+			case res := <-resCh:
+				if res == nil {
+					continue
+				}
+
+				lobby := r.GetOrCreateLobby(res.LobbyId, func() *report.LobbyStat {
+					return &report.LobbyStat{
+						Mode:          player.mode,
+						Players:       int(res.CurrentPlayers),
+						MaxPlayers:    int(res.MaxPlayers),
+						RatingSet:     map[string]int32{player.id: player.rating},
+						CategoriesSet: map[string][]int32{player.id: player.categories},
+						CreatedAt:     time.Now(),
+					}
+				})
+
+				lobby.Lock()
+				switch res.Status {
+				case lobbyv1.Status_STATUS_STARTING:
+					r.AddToMap(&r.Starter, res.LobbyId)
+					lobby.Players = int(res.CurrentPlayers)
+					lobby.RatingSet[player.id] = player.rating
+					lobby.CategoriesSet[player.id] = player.categories
+					if lobby.StartedAt.IsZero() {
+						lobby.StartedAt = time.Now()
+					}
+					lobby.Status = report.StartedStatus
+
+				case lobbyv1.Status_STATUS_WAITING:
+					r.AddToMap(&r.WaitedPlayers, player.id)
+					lobby.Status = report.WaitedStatus
+
+				case lobbyv1.Status_STATUS_TIMEOUT:
+					r.AddToMap(&r.Expired, res.LobbyId)
+					r.AddToMap(&r.ExpiredPlayers, player.id)
+					lobby.Status = report.ExpiredStatus
+				}
+				lobby.Unlock()
 			}
-		})
-
-		lobby.Lock()
-		switch res.Status {
-		case lobbyv1.Status_STATUS_STARTING:
-			r.AddToMap(&r.Starter, res.LobbyId)
-			lobby.Players = int(res.CurrentPlayers)
-			lobby.RatingSet[player.id] = player.rating
-			lobby.CategoriesSet[player.id] = player.categories
-			if lobby.StartedAt.IsZero() {
-				lobby.StartedAt = time.Now()
-			}
-			lobby.Status = report.StartedStatus
-
-		case lobbyv1.Status_STATUS_WAITING:
-			r.AddToMap(&r.WaitedPlayers, player.id)
-			lobby.Status = report.WaitedStatus
-
-		case lobbyv1.Status_STATUS_TIMEOUT:
-			r.AddToMap(&r.Expired, res.LobbyId)
-			r.AddToMap(&r.ExpiredPlayers, player.id)
-			lobby.Status = report.ExpiredStatus
-
-		case lobbyv1.Status_STATUS_ERROR:
-			r.AddToMap(&r.Errored, res.LobbyId)
-			r.AddToMap(&r.ErroredPlayers, player.id)
-			lobby.Status = report.ErroredStatus
 		}
-		lobby.Unlock()
-		return
-	}
+	}()
 }

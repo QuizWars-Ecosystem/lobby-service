@@ -21,7 +21,7 @@ func generator(_ *testing.T, cfg *config.TestConfig) <-chan player {
 	if cfg.Generator.PlayersCount > 10_000 {
 		out = make(chan player, cfg.Generator.PlayersCount/100)
 	} else {
-		out = make(chan player, 50)
+		out = make(chan player, 500)
 	}
 
 	go func() {

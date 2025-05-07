@@ -33,14 +33,16 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  10_000,
-			MaxRating:     10_000,
+			PlayersCount:  50_000,
+			MaxRating:     5_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 50,
+			CategoryMaxID: 20,
 			Modes: []string{
 				"classic",
 				"battle",
 				"1v1",
+				"blitz",
+				"team",
 				"mega",
 			},
 		},
@@ -63,10 +65,18 @@ func NewTestConfig() *TestConfig {
 				ModeStats: map[string]handler.StatPair{
 					"classic": {
 						Min: 4,
-						Max: 8,
+						Max: 10,
 					},
 					"battle": {
 						Min: 2,
+						Max: 4,
+					},
+					"blitz": {
+						Min: 3,
+						Max: 6,
+					},
+					"team": {
+						Min: 4,
 						Max: 4,
 					},
 					"1v1": {
@@ -74,8 +84,8 @@ func NewTestConfig() *TestConfig {
 						Max: 2,
 					},
 					"mega": {
-						Min: 12,
-						Max: 64,
+						Min: 24,
+						Max: 128,
 					},
 				},
 				LobbyTLL:         time.Minute * 5,
@@ -88,10 +98,10 @@ func NewTestConfig() *TestConfig {
 				MinReadyDuration: time.Second * 10,
 			},
 			Matcher: &matchmaking.Config{
-				CategoryWeight:    0.7,
-				RatingWeight:      0.2,
-				PlayersFillWeight: 0.1,
-				MaxExpectedRating: 500,
+				CategoryWeight:    0.5,
+				RatingWeight:      0.3,
+				PlayersFillWeight: 0.2,
+				MaxExpectedRating: 1000,
 			},
 		},
 		Redis: &redisClusterCfg,

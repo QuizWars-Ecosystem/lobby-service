@@ -30,9 +30,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 		wg := &sync.WaitGroup{}
 
 		for p := range in {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
-
-			time.AfterFunc(time.Minute*3, cancel)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
 
 			stream, err := client.JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
 				PlayerId:    p.id,
@@ -49,7 +47,8 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 			go watchStream(p, stream, r, wg, cancel)
 
-			time.Sleep(time.Millisecond * time.Duration(rand.IntN(10)))
+			diff := rand.IntN(10)
+			time.Sleep(time.Millisecond * time.Duration(diff))
 		}
 
 		r.FinishRequesting()

@@ -77,28 +77,25 @@ func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyS
 				switch res.Status {
 				case lobbyv1.Status_STATUS_STARTING:
 					r.AddStartedLobby(res.LobbyId)
-
 					lobby.SetCurrentPlayers(res.CurrentPlayers).
 						AddRating(player.id, player.rating).
 						AddCategories(player.id, player.categories).
 						SetAsStarted()
+					cancelCtxFn()
 
 				case lobbyv1.Status_STATUS_WAITING:
 					r.AddWaitedPlayer(player.id)
-
 					lobby.SetAsWaited()
 
 				case lobbyv1.Status_STATUS_TIMEOUT:
 					r.AddExpiredLobby(res.LobbyId).
 						AddExpiredPlayer(player.id)
-
 					lobby.SetAsExpired()
 					cancelCtxFn()
 
 				case lobbyv1.Status_STATUS_ERROR:
 					r.AddErroredLobby(res.LobbyId).
 						AddErroredPlayer(player.id)
-
 					lobby.SetAsErrored()
 					cancelCtxFn()
 				}

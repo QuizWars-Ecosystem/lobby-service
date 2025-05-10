@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/clients"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
-	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -22,36 +21,46 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 		defer func() {
 			r.Finish()
 
-			r.LogStatsPrint()
 			r.LogStatsHTML()
 		}()
 
 		r.Start()
 
+		wgWorkers := sync.WaitGroup{}
 		wg := &sync.WaitGroup{}
 
-		for p := range in {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
+		workers := cfg.ServerAmount * 2
 
-			stream, err := manager.GetClient().JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
-				PlayerId:    p.id,
-				Rating:      p.rating,
-				CategoryIds: p.categories,
-				Mode:        p.mode,
-			})
+		wgWorkers.Add(workers)
 
-			require.NoError(t, err)
+		for i := 0; i < workers; i++ {
+			go func() {
+				for p := range in {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 
-			r.ModeInc(p.mode)
+					stream, err := manager.GetClient().JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
+						PlayerId:    p.id,
+						Rating:      p.rating,
+						CategoryIds: p.categories,
+						Mode:        p.mode,
+					})
 
-			wg.Add(1)
+					require.NoError(t, err)
 
-			go watchStream(p, stream, r, wg, cancel)
+					r.ModeInc(p.mode)
 
-			diff := rand.IntN(10)
-			time.Sleep(time.Millisecond * time.Duration(diff))
+					wg.Add(1)
+
+					go watchStream(p, stream, r, wg, cancel)
+
+					time.Sleep(time.Millisecond * 20)
+				}
+
+				wgWorkers.Done()
+			}()
 		}
 
+		wgWorkers.Wait()
 		r.FinishRequesting()
 		wg.Wait()
 	})

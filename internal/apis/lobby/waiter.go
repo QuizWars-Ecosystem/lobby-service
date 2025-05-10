@@ -36,7 +36,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 	ticker := time.NewTicker(w.getTickerTimeout())
 	defer ticker.Stop()
 
-	var prevPlayerCount int
+	var prevPlayerCount int16
 	var status *lobbyv1.LobbyStatus
 
 	for {
@@ -44,26 +44,21 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 		case <-ticker.C:
 			updated, err := w.store.GetLobby(ctx, lobby.ID)
 			if err != nil {
+				status = &lobbyv1.LobbyStatus{
+					LobbyId: lobby.ID,
+					Status:  lobbyv1.Status_STATUS_ERROR,
+				}
+
+				w.streamer.BroadcastLobbyUpdate(lobby.ID, status)
+
 				return
 			}
 
-			playerCount := len(updated.Players)
-
-			/*w.logger.Debug("LOBBY",
-				zap.String("ID", updated.ID),
-				zap.Int32s("Categories", updated.Categories),
-				zap.Int32("AvgRating", updated.AvgRating),
-				zap.Any("Players", updated.Players),
-			)
-
-			w.logger.Debug("PLAYERS",
-				zap.Int("Current", playerCount),
-				zap.Int("Previous", prevPlayerCount),
-			)*/
+			playerCount := int16(len(updated.Players))
 
 			// If players not come and max time waiting expired
 			if playerCount == 0 && time.Since(updated.CreatedAt) > w.getMaxLobbyWait() {
-				if err = w.store.ExpireLobby(ctx, updated.ID, updated.Mode); err != nil {
+				if err = w.store.RemoveLobby(ctx, updated.ID, updated.Mode); err != nil {
 					w.logger.Warn("Failed to expire lobby", zap.String("id", updated.ID), zap.Error(err))
 				}
 
@@ -73,7 +68,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 
 			// Is lobby time is expired
 			if time.Now().After(updated.ExpireAt) {
-				if err = w.store.ExpireLobby(ctx, updated.ID, updated.Mode); err != nil {
+				if err = w.store.RemoveLobby(ctx, updated.ID, updated.Mode); err != nil {
 					w.logger.Warn("Failed to expire lobby", zap.String("id", updated.ID), zap.Error(err))
 				}
 
@@ -128,7 +123,7 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 					// Lobby is ready to start, send request to Game Router Service
 					// w.logger.Debug("LOBBY IS READY TO START", zap.String("ID", updated.ID))
 
-					if err = w.store.MarkLobbyAsFull(ctx, updated.ID, updated.Mode); err != nil {
+					if err = w.store.RemoveLobby(ctx, updated.ID, updated.Mode); err != nil {
 						w.logger.Warn("Failed to mark lobby as full", zap.String("id", updated.ID), zap.Error(err))
 					}
 
@@ -149,15 +144,6 @@ func (w *Waiter) WaitForLobbyFill(ctx context.Context, lobby *models.Lobby) {
 					return
 				}
 			}
-
-			/*w.logger.Debug("LOBBY",
-				zap.String("ID", updated.ID),
-				zap.Int("Current", playerCount),
-				zap.Int("Previous", prevPlayerCount),
-				zap.Duration("From start", time.Since(updated.CreatedAt)),
-				zap.Duration("To end", time.Until(updated.ExpireAt)),
-				zap.Duration("Last join", time.Since(updated.LastJoinedAt)),
-			)*/
 
 			if playerCount != prevPlayerCount {
 				prevPlayerCount = playerCount

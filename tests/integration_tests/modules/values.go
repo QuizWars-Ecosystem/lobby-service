@@ -41,9 +41,15 @@ func generatePlayer(cfg *config.Generator) player {
 		categoriesAmount += 4
 	}
 
-	var categories = make([]int32, categoriesAmount)
-	for j := 0; j < categoriesAmount; j++ {
-		categories[j] = rand.Int32N(cfg.CategoryMaxID + 1)
+	uniqueCategories := make(map[int32]struct{})
+	for len(uniqueCategories) < categoriesAmount {
+		catID := rand.Int32N(cfg.CategoryMaxID + 1)
+		uniqueCategories[catID] = struct{}{}
+	}
+
+	categories := make([]int32, 0, len(uniqueCategories))
+	for cat := range uniqueCategories {
+		categories = append(categories, cat)
 	}
 
 	p := player{

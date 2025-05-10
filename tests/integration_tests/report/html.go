@@ -137,6 +137,7 @@ func (r *Result) LogStatsHTML() {
 
 	// ===== Detailed per-mode Stats =====
 	rowsByMode := make(map[string][]statRow)
+	threshold := 0.6
 
 	for id, lobby := range r.lobbies {
 		lobbiesCount++
@@ -162,45 +163,27 @@ func (r *Result) LogStatsHTML() {
 			avg = float64(sum) / float64(len(lobby.ratingSet))
 		}
 
-		// Categories
-		common := make(map[int32]struct{}, len(lobby.categoriesSet))
-		all := make(map[int32]struct{}, len(lobby.categoriesSet))
-		first := true
+		numPlayers := len(lobby.categoriesSet)
+		categoryCount := make(map[int32]int)
 
 		for _, cats := range lobby.categoriesSet {
-			playerCats := make(map[int32]struct{}, len(cats))
-
+			seen := make(map[int32]struct{})
 			for _, c := range cats {
-				playerCats[c] = struct{}{}
-				all[c] = struct{}{}
-			}
-
-			if first {
-				for c := range playerCats {
-					common[c] = struct{}{}
-				}
-				first = false
-			} else {
-				for c := range common {
-					if _, ok := playerCats[c]; !ok {
-						delete(common, c)
-					}
+				if _, ok := seen[c]; !ok {
+					categoryCount[c]++
+					seen[c] = struct{}{}
 				}
 			}
 		}
 
-		var commonSlice = make([]int, len(common))
+		var commonSlice []int
 		var uniqueSlice []int
-		var count int
 
-		for c := range common {
-			commonSlice[count] = int(c)
-			count++
-		}
-
-		for c := range all {
-			if _, ok := common[c]; !ok {
-				uniqueSlice = append(uniqueSlice, int(c))
+		for cat, count := range categoryCount {
+			if float64(count)/float64(numPlayers) >= threshold {
+				commonSlice = append(commonSlice, int(cat))
+			} else {
+				uniqueSlice = append(uniqueSlice, int(cat))
 			}
 		}
 
@@ -250,7 +233,7 @@ func (r *Result) LogStatsHTML() {
 		for _, mode := range sortedKeys(rowsByMode) {
 			htmlBuilder.WriteString("<h3>🎮 Mode: " + mode + "</h3>")
 			htmlBuilder.WriteString(`<table>
-			<tr><th onclick="toggleSort(this.parentNode.parentNode, 0)">Lobby ID</th><th onclick="toggleSort(this.parentNode.parentNode, 1)">Players</th><th onclick="toggleSort(this.parentNode.parentNode, 2)">Avg Rating</th><th onclick="toggleSort(this.parentNode.parentNode, 3)">Min</th><th onclick="toggleSort(this.parentNode.parentNode, 4)">Max</th><th onclick="toggleSort(this.parentNode.parentNode, 5)">Common Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 6)">Unique Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 7)">Status</th><th onclick="toggleSort(this.parentNode.parentNode, 8)">Wait</th></tr>`)
+			<tr><th onclick="toggleSort(this.parentNode.parentNode, 0)">Lobby ID</th><th onclick="toggleSort(this.parentNode.parentNode, 1)">Players</th><th onclick="toggleSort(this.parentNode.parentNode, 2)">Avg Rating</th><th onclick="toggleSort(this.parentNode.parentNode, 3)">Min</th><th onclick="toggleSort(this.parentNode.parentNode, 4)">Max</th><th onclick="toggleSort(this.parentNode.parentNode, 5)">Common Cats (` + fmt.Sprintf(">=%d", int(threshold*100)) + `%)</th><th onclick="toggleSort(this.parentNode.parentNode, 6)">Unique Cats</th><th onclick="toggleSort(this.parentNode.parentNode, 7)">Status</th><th onclick="toggleSort(this.parentNode.parentNode, 8)">Wait</th></tr>`)
 			for _, row := range rowsByMode[mode] {
 				htmlBuilder.WriteString("<tr>")
 				htmlBuilder.WriteString("<td>" + row.id + "</td>")

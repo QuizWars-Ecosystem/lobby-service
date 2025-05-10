@@ -26,13 +26,11 @@ type statRow struct {
 }
 
 func (r *Result) LogStatsPrint() {
-	if len(r.lobbies) > 100 {
-		r.lobbies = cutMap(r.lobbies, 100)
-	}
-
 	rowsByMode := make(map[string][]statRow, len(r.modes))
 	var playersInLobbies int32
 	var lobbiesCount int
+
+	threshold := 0.6
 
 	for id, lobby := range r.lobbies {
 		lobbiesCount++
@@ -58,45 +56,27 @@ func (r *Result) LogStatsPrint() {
 			avg = float64(sum) / float64(len(lobby.ratingSet))
 		}
 
-		// Categories
-		common := make(map[int32]struct{}, len(lobby.categoriesSet))
-		all := make(map[int32]struct{}, len(lobby.categoriesSet))
-		first := true
+		numPlayers := len(lobby.categoriesSet)
+		categoryCount := make(map[int32]int)
 
 		for _, cats := range lobby.categoriesSet {
-			playerCats := make(map[int32]struct{}, len(cats))
-
+			seen := make(map[int32]struct{})
 			for _, c := range cats {
-				playerCats[c] = struct{}{}
-				all[c] = struct{}{}
-			}
-
-			if first {
-				for c := range playerCats {
-					common[c] = struct{}{}
-				}
-				first = false
-			} else {
-				for c := range common {
-					if _, ok := playerCats[c]; !ok {
-						delete(common, c)
-					}
+				if _, ok := seen[c]; !ok {
+					categoryCount[c]++
+					seen[c] = struct{}{}
 				}
 			}
 		}
 
-		var commonSlice = make([]int, len(common))
+		var commonSlice []int
 		var uniqueSlice []int
-		var count int
 
-		for c := range common {
-			commonSlice[count] = int(c)
-			count++
-		}
-
-		for c := range all {
-			if _, ok := common[c]; !ok {
-				uniqueSlice = append(uniqueSlice, int(c))
+		for cat, count := range categoryCount {
+			if float64(count)/float64(numPlayers) >= threshold {
+				commonSlice = append(commonSlice, int(cat))
+			} else {
+				uniqueSlice = append(uniqueSlice, int(cat))
 			}
 		}
 
@@ -205,7 +185,7 @@ func (r *Result) LogStatsPrint() {
 		t.SetStyle(table.StyleBold)
 		t.AppendHeader(table.Row{
 			"Lobby ID", "Players", "Avg Rating", "Min", "Max",
-			"Common Cats", "Unique Cats", "Status", "Wait",
+			fmt.Sprintln("Common Cats (>=", threshold*100, "%)"), "Unique Cats", "Status", "Wait",
 		})
 
 		for _, row := range rowsByMode[mode] {

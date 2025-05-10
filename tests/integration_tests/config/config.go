@@ -28,19 +28,19 @@ func NewTestConfig() *TestConfig {
 	natsCfg := test.DefaultNatsConfig()
 
 	redisClusterCfg.Masters = 3
-	redisClusterCfg.Replicas = 1
+	redisClusterCfg.Replicas = 2
 
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  50_000,
-			MaxRating:     5_000,
+			PlayersCount:  10_000,
+			MaxRating:     10_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 20,
+			CategoryMaxID: 50,
 			Modes: []string{
 				"classic",
 				"battle",
-				"1v1",
+				"duel",
 				"blitz",
 				"team",
 				"mega",
@@ -79,7 +79,7 @@ func NewTestConfig() *TestConfig {
 						Min: 4,
 						Max: 4,
 					},
-					"1v1": {
+					"duel": {
 						Min: 2,
 						Max: 2,
 					},
@@ -89,7 +89,7 @@ func NewTestConfig() *TestConfig {
 					},
 				},
 				LobbyTLL:         time.Minute * 5,
-				MaxLobbyAttempts: 3,
+				MaxLobbyAttempts: 5,
 			},
 			Lobby: &lobby.Config{
 				TickerTimeout:    time.Second,
@@ -101,7 +101,7 @@ func NewTestConfig() *TestConfig {
 				CategoryWeight:    0.5,
 				RatingWeight:      0.3,
 				PlayersFillWeight: 0.2,
-				MaxExpectedRating: 1000,
+				MaxExpectedRating: 500,
 			},
 		},
 		Redis: &redisClusterCfg,

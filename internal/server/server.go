@@ -95,9 +95,9 @@ func NewServer(ctx context.Context, manager *manager.Manager[config.Config]) (*S
 
 	grpcprometheus.EnableHandlingTimeHistogram()
 
-	streamManager := streamer.NewStreamManager(ns, logger.Zap())
-	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	storage := store.NewStore(redisClient, logger.Zap())
+	streamManager := streamer.NewStreamManager(ns, storage, logger.Zap())
+	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
 	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)
 

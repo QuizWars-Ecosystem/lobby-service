@@ -46,8 +46,8 @@ func (h *Handler) getLobbyTLL() time.Duration {
 func (h *Handler) getMaxLobbyAttempts() int {
 	h.mx.RLock()
 	defer h.mx.RUnlock()
-	if h.cfg.MaxLobbyAttempts < 3 {
-		return 3
+	if h.cfg.MaxLobbyAttempts < 2 {
+		return 2
 	}
 	return h.cfg.MaxLobbyAttempts
 }

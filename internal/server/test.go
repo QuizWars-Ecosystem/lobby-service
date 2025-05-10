@@ -40,13 +40,13 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 
 	redisClient, err := clients.NewRedisClusterClient(
 		clients.NewRedisClusterOptions(cfg.Redis.URLs).
-			WithDialTimeout(20*time.Second).
-			WithMaxRetries(3).
+			WithDialTimeout(30*time.Second).
+			WithMaxRetries(5).
 			WithPoolSize(1000).
-			WithMinIdleConns(100).
-			WithPoolTimeout(2*time.Second).
-			WithReadTimeout(time.Second).
-			WithWriteTimeout(time.Second).
+			WithMinIdleConns(200).
+			WithPoolTimeout(time.Second*5).
+			WithReadTimeout(time.Second*2).
+			WithWriteTimeout(time.Second*2).
 			WithRouterByLatency(true).
 			WithBackoffTimeouts(100*time.Millisecond, time.Second),
 	)
@@ -65,9 +65,9 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 
 	cl.PushNE(ns.Close)
 
-	streamManager := streamer.NewStreamManager(ns, logger.Zap())
-	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	storage := store.NewStore(redisClient, logger.Zap())
+	streamManager := streamer.NewStreamManager(ns, storage, logger.Zap())
+	matcher := matchmaking.NewMatcher(cfg.Matcher)
 	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
 	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)
 

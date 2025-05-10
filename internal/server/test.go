@@ -47,7 +47,7 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 			WithPoolTimeout(time.Second*5).
 			WithReadTimeout(time.Second*2).
 			WithWriteTimeout(time.Second*2).
-			WithRouterByLatency(true).
+			WithRouteRandomly(true).
 			WithBackoffTimeouts(100*time.Millisecond, time.Second),
 	)
 	if err != nil {

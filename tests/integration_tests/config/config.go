@@ -1,10 +1,10 @@
 package config
 
 import (
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
 	"time"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/matchmaking"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
 
@@ -97,11 +97,58 @@ func NewTestConfig() *TestConfig {
 				LobbyIdleExtend:  time.Second * 15,
 				MinReadyDuration: time.Second * 10,
 			},
-			Matcher: &matchmaking.Config{
-				CategoryWeight:    0.5,
-				RatingWeight:      0.3,
-				PlayersFillWeight: 0.2,
-				MaxExpectedRating: 500,
+			Matcher: &matcher.Config{
+				Configs: map[string]matcher.ScoringConfig{
+					"default": {
+						RatingWeight:     0.3,
+						CategoryWeight:   0.5,
+						FillWeight:       0.2,
+						MaxRatingDiff:    1000,
+						MinCategoryMatch: 0.3,
+					},
+					"duel": {
+						RatingWeight:     0.9,
+						CategoryWeight:   0.1,
+						FillWeight:       0.0,
+						MaxRatingDiff:    500,
+						MinCategoryMatch: 0.2,
+					},
+					"battle": {
+						RatingWeight:     0.7,
+						CategoryWeight:   0.3,
+						FillWeight:       0.0,
+						MaxRatingDiff:    800,
+						MinCategoryMatch: 0.1,
+					},
+					"classic": {
+						RatingWeight:     0.3,
+						CategoryWeight:   0.5,
+						FillWeight:       0.2,
+						MaxRatingDiff:    1000,
+						MinCategoryMatch: 0.4,
+					},
+					"blitz": {
+						RatingWeight:     0.3,
+						CategoryWeight:   0.4,
+						FillWeight:       0.3,
+						MaxRatingDiff:    800,
+						MinCategoryMatch: 0.5,
+					},
+					"team": {
+						RatingWeight:     0.5,
+						CategoryWeight:   0.4,
+						FillWeight:       0.1,
+						MaxRatingDiff:    1000,
+						MinCategoryMatch: 0.7,
+					},
+					"mega": {
+						RatingWeight:     0.0,
+						CategoryWeight:   0.0,
+						FillWeight:       1.0,
+						MaxRatingDiff:    10_000,
+						MinCategoryMatch: 0.0,
+					},
+				},
 			},
 		},
 		Redis: &redisClusterCfg,

@@ -40,14 +40,14 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 
 	redisClient, err := clients.NewRedisClusterClient(
 		clients.NewRedisClusterOptions(cfg.Redis.URLs).
-			WithDialTimeout(30*time.Second).
-			WithMaxRetries(5).
-			WithPoolSize(1000).
+			WithDialTimeout(20*time.Second).
+			WithMaxRetries(3).
+			WithPoolSize(2000).
 			WithMinIdleConns(200).
 			WithPoolTimeout(time.Second*5).
 			WithReadTimeout(time.Second*2).
 			WithWriteTimeout(time.Second*2).
-			WithRouteRandomly(true).
+			WithRouterByLatency(true).
 			WithBackoffTimeouts(100*time.Millisecond, time.Second),
 	)
 	if err != nil {

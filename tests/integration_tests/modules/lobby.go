@@ -15,7 +15,7 @@ import (
 
 func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *config.TestConfig) {
 	in := generator(t, cfg)
-	r := report.NewResult(cfg.Generator.PlayersCount)
+	r := report.NewResult(cfg.Generator.PlayersCount, cfg)
 
 	t.Run("multi_lobby.JoinLobby", func(t *testing.T) {
 		defer func() {

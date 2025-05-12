@@ -32,6 +32,7 @@ func (r *Result) LogStatsHTML() {
 		.red { color: red; }
 		.green { color: green; }
 		.yellow { color: orange; }
+		.blue { color: blue; }
 	</style>
 	<script>
 		function sortTable(table, colIndex, asc) {
@@ -68,6 +69,38 @@ func (r *Result) LogStatsHTML() {
 	</script>
 	</head><body>
 	<h1>Lobby Statistics</h1>`)
+
+	// ===== Test Configuration Summary =====
+	cfg := r.cfg
+	if cfg != nil {
+		htmlBuilder.WriteString("<h2>⚙️ Test Configuration</h2><table>")
+		htmlBuilder.WriteString("<tr><th>Setting</th><th>Value</th></tr>")
+		htmlBuilder.WriteString("<tr><td>Server Amount</td><td>" + fmt.Sprint(cfg.ServerAmount) + "</td></tr>")
+
+		gen := cfg.Generator
+		if gen != nil {
+			htmlBuilder.WriteString("<tr><td>Players Count</td><td>" + fmt.Sprint(gen.PlayersCount) + "</td></tr>")
+			htmlBuilder.WriteString("<tr><td>Max Rating</td><td>" + fmt.Sprint(gen.MaxRating) + "</td></tr>")
+			htmlBuilder.WriteString("<tr><td>Categories Max per Player</td><td>" + fmt.Sprint(gen.CategoriesMax) + "</td></tr>")
+			htmlBuilder.WriteString("<tr><td>Category Max ID</td><td>" + fmt.Sprint(gen.CategoryMaxID) + "</td></tr>")
+			htmlBuilder.WriteString("<tr><td>Modes</td><td>" + strings.Join(gen.Modes, ", ") + "</td></tr>")
+		}
+
+		if cfg.ServiceConfig != nil && cfg.ServiceConfig.Matcher != nil {
+			htmlBuilder.WriteString("</table><h3>🎯 Matchmaking Config</h3><table>")
+			htmlBuilder.WriteString("<tr><th>Mode</th><th>RatingWeight</th><th>CategoryWeight</th><th>FillWeight</th><th>MaxRatingDiff</th><th>MinCategoryMatch</th></tr>")
+
+			for mode, mc := range cfg.ServiceConfig.Matcher.Configs {
+				htmlBuilder.WriteString("<tr><td>" + mode + "</td><td>" +
+					fmt.Sprintf("%.2f", mc.RatingWeight) + "</td><td>" +
+					fmt.Sprintf("%.2f", mc.CategoryWeight) + "</td><td>" +
+					fmt.Sprintf("%.2f", mc.FillWeight) + "</td><td>" +
+					fmt.Sprint(mc.MaxRatingDiff) + "</td><td>" +
+					fmt.Sprintf("%.2f", mc.MinCategoryMatch) + "</td></tr>")
+			}
+		}
+		htmlBuilder.WriteString("</table>")
+	}
 
 	// ===== Summary Table =====
 	var playersInLobbies, lobbiesCount int32
@@ -208,6 +241,8 @@ func (r *Result) LogStatsHTML() {
 			statusDef = "EXPIRED"
 		case erroredStatus:
 			statusDef = "ERROR"
+		case waitedStatus:
+			statusDef = "WAIT"
 		}
 
 		row := statRow{
@@ -246,6 +281,8 @@ func (r *Result) LogStatsHTML() {
 				switch row.status {
 				case "STARTED":
 					htmlBuilder.WriteString(`<td class="green">` + row.status + "</td>")
+				case "WAIT":
+					htmlBuilder.WriteString(`<td class="blue">` + row.status + "</td>")
 				case "EXPIRED":
 					htmlBuilder.WriteString(`<td class="yellow">` + row.status + "</td>")
 				case "ERROR":

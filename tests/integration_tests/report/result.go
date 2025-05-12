@@ -1,6 +1,7 @@
 package report
 
 import (
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"sync"
 	"time"
 )
@@ -58,12 +59,14 @@ type Result struct {
 	erroredPlayersMu sync.RWMutex
 	erroredPlayers   map[string]struct{}
 
+	cfg *config.TestConfig
+
 	startedAt        time.Time
 	finishedAt       time.Time
 	finishRequesting time.Time
 }
 
-func NewResult(playersCount int) *Result {
+func NewResult(playersCount int, cfg *config.TestConfig) *Result {
 	return &Result{
 		totalPlayers:   playersCount,
 		lobbies:        make(map[string]*LobbyStat, playersCount/4),
@@ -74,6 +77,7 @@ func NewResult(playersCount int) *Result {
 		expiredPlayers: make(map[string]struct{}),
 		errored:        make(map[string]struct{}),
 		erroredPlayers: make(map[string]struct{}),
+		cfg:            cfg,
 		startedAt:      time.Now(),
 		finishedAt:     time.Now(),
 	}

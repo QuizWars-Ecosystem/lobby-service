@@ -83,10 +83,12 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 		if err != nil {
 			h.sendErrorStatus(stream, request.PlayerId)
 			return err
+		} else if len(activeLobbies) == 0 {
+			break
 		}
 
-		candidateLobbies := h.matcher.FilterLobbies(activeLobbies, player)
-		selectedLobby := h.matcher.SelectBestLobby(candidateLobbies, player)
+		candidateLobbies := h.matcher.FilterLobbies(mode, activeLobbies, player)
+		selectedLobby := h.matcher.SelectBestLobby(mode, candidateLobbies, player)
 
 		if selectedLobby == nil {
 			continue

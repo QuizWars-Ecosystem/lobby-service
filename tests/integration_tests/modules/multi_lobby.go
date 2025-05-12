@@ -15,7 +15,7 @@ import (
 
 func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.TestConfig) {
 	in := generator(t, cfg)
-	r := report.NewResult(cfg.Generator.PlayersCount)
+	r := report.NewResult(cfg.Generator.PlayersCount, cfg)
 
 	t.Run("multi_lobby.JoinLobby", func(t *testing.T) {
 		defer func() {
@@ -29,7 +29,7 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 		wgWorkers := sync.WaitGroup{}
 		wg := &sync.WaitGroup{}
 
-		workers := cfg.ServerAmount * 2
+		workers := cfg.ServerAmount
 
 		wgWorkers.Add(workers)
 
@@ -53,7 +53,7 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 
 					go watchStream(p, stream, r, wg, cancel)
 
-					time.Sleep(time.Millisecond * 20)
+					time.Sleep(time.Millisecond * 25)
 				}
 
 				wgWorkers.Done()

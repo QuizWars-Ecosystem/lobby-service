@@ -1,0 +1,158 @@
+{{define "lobby_details"}}
+    <div class="card">
+        <h2>Lobby Details</h2>
+        <input type="text" id="lobbySearch" class="search-box" placeholder="Search lobbies..." onkeyup="searchLobbies()">
+        <div class="tab-container">
+            <div class="tab-buttons" id="modeTabs">
+                {{range $index, $mode := .Modes}}
+                    <button class="tab-button{{if eq $index 0}} active{{end}}" onclick="openTab(event, '{{$mode}}')">{{$mode}}</button>
+                {{end}}
+            </div>
+
+            {{range $index, $mode := .Modes}}
+                <div id="{{$mode}}" class="tab-content{{if eq $index 0}} active{{end}}">
+                    <table class="lobby-table" data-mode="{{$mode}}">
+                        <thead>
+                        <tr>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'id')">Lobby ID</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'players')">Players</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'avgRating')">Avg Rating</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'minRating')">Min Rating</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'maxRating')">Max Rating</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'commonCats')">Common Categories</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'waitTime')">Wait Time</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'status')">Status</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {{range $lobby := index $.RowsByMode $mode}}
+                            <tr data-id="{{$lobby.ID}}"
+                                data-players="{{$lobby.PlayersCount}}"
+                                data-max-players="{{$lobby.MaxPlayers}}"
+                                data-avg-rating="{{printf "%.0f" $lobby.AvgRating}}"
+                                data-min-rating="{{$lobby.MinRating}}"
+                                data-max-rating="{{$lobby.MaxRating}}"
+                                data-wait-time="{{$lobby.WaitDuration}}"
+                                data-status="{{$lobby.Status}}">
+                                <td>{{$lobby.ID}}</td>
+                                <td>{{$lobby.PlayersCount}}/{{$lobby.MaxPlayers}}</td>
+                                <td>{{printf "%.0f" $lobby.AvgRating}}</td>
+                                <td>{{$lobby.MinRating}}</td>
+                                <td>{{$lobby.MaxRating}}</td>
+                                <td>{{formatCategoryList $lobby.CommonCats}}</td>
+                                <td>{{$lobby.WaitDuration}}</td>
+                                <td><span class="badge {{$lobby.StatusClass}}">{{$lobby.Status}}</span></td>
+                                <td>
+                                    <button class="view-lobby-btn" data-lobby-id="{{$lobby.ID}}">View Details</button>
+                                </td>
+                            </tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            {{end}}
+        </div>
+        {{template "lobby_modal" .}}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('view-lobby-btn')) {
+                    const lobbyId = e.target.getAttribute('data-lobby-id');
+
+                    if (!window.lobbyDataRegistry || !window.lobbyDataRegistry.isReady()) {
+                        console.error('Lobby data not initialized');
+                        return;
+                    }
+
+                    const lobby = window.lobbyDataRegistry.getLobby(lobbyId);
+                    if (!lobby) {
+                        console.error('Lobby not found:', lobbyId);
+                        return;
+                    }
+
+                    // Заполнение модального окна
+                    const modal = document.getElementById('lobbyModal');
+                    const content = document.getElementById('modalContent');
+
+                    content.innerHTML = `
+                <h3>Lobby ${lobby.id}</h3>
+                <div class="lobby-meta">
+                    <p><strong>Mode:</strong> ${lobby.mode}</p>
+                    <p><strong>Players:</strong> ${lobby.playersCount}/${lobby.maxPlayers}</p>
+                    <p><strong>Status:</strong> <span class="${lobby.statusClass}">${lobby.status}</span></p>
+                </div>
+
+                <h4>Players</h4>
+                <table class="players-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Rating</th>
+                            <th>Categories</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${lobby.players.map(player => `
+                            <tr>
+                                <td>${player.id}</td>
+                                <td>${player.rating}</td>
+                                <td>${player.categories.join(', ')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+                    modal.style.display = 'block';
+                }
+            });
+        });
+
+        function sortLobbyTable(header, mode, sortKey) {
+            const table = document.querySelector(`#${mode} table.lobby-table`);
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const direction = header.getAttribute('data-sort-direction') === 'asc' ? -1 : 1;
+
+            table.querySelectorAll('th').forEach(th => {
+                th.removeAttribute('data-sort-direction');
+                th.classList.remove('sorted-asc', 'sorted-desc');
+            });
+
+            header.setAttribute('data-sort-direction', direction === 1 ? 'asc' : 'desc');
+            header.classList.add(direction === 1 ? 'sorted-asc' : 'sorted-desc');
+
+            rows.sort((a, b) => {
+                let aValue, bValue;
+
+                if (sortKey === 'avgRating' || sortKey === 'minRating' || sortKey === 'maxRating') {
+                    aValue = parseFloat(a.getAttribute(`data-${sortKey}`)) || 0;
+                    bValue = parseFloat(b.getAttribute(`data-${sortKey}`)) || 0;
+                    return (aValue - bValue) * direction;
+                } else {
+                    aValue = a.getAttribute(`data-${sortKey}`) || a.textContent.trim();
+                    bValue = b.getAttribute(`data-${sortKey}`) || b.textContent.trim();
+                    return aValue.toString().localeCompare(bValue.toString()) * direction;
+                }
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function timeStringToSeconds(timeStr) {
+            if (!timeStr || timeStr === '-') return 0;
+            if (timeStr === '<1s') return 0;
+
+            const parts = timeStr.split(':').reverse();
+            let seconds = 0;
+
+            if (parts.length > 0) seconds += parseFloat(parts[0]);
+            if (parts.length > 1) seconds += parseInt(parts[1]) * 60;
+            if (parts.length > 2) seconds += parseInt(parts[2]) * 3600;
+
+            return seconds;
+        }
+    </script>
+{{end}}

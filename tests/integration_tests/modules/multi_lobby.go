@@ -21,7 +21,7 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 		defer func() {
 			r.Finish()
 
-			r.LogStatsHTML()
+			require.NoError(t, r.GenerateHTMLReport())
 		}()
 
 		r.Start()
@@ -58,10 +58,11 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 
 				wgWorkers.Done()
 			}()
+			time.Sleep(time.Second)
 		}
 
 		wgWorkers.Wait()
-		r.FinishRequesting()
+		r.FinishRequestingMethod()
 		wg.Wait()
 	})
 }

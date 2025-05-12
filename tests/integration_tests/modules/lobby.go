@@ -21,8 +21,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 		defer func() {
 			r.Finish()
 
-			r.LogStatsPrint()
-			r.LogStatsHTML()
+			require.NoError(t, r.GenerateHTMLReport())
 		}()
 
 		r.Start()
@@ -51,7 +50,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 			time.Sleep(time.Millisecond * time.Duration(diff))
 		}
 
-		r.FinishRequesting()
+		r.FinishRequestingMethod()
 		wg.Wait()
 	})
 }

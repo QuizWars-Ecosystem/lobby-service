@@ -1,0 +1,91 @@
+{{define "players_per_mode"}}
+    {{if .Result.Modes}}
+        <div class="card">
+            <h2>Players Distribution by Mode</h2>
+            <div class="distribution-container">
+                <!-- Stacked Bar Chart -->
+                <div class="stacked-bar" style="background-color: #f0f0f0;">
+                    {{$total := .Result.TotalPlayers}}
+                    {{range $mode, $count := .Result.Modes}}
+                        {{$width := div (toFloat64 $count) (toFloat64 $total)}}
+                        <div class="segment"
+                             style="width: {{mul $width 100}}%;
+                                     background-color: {{randomColor $mode}};
+                                     color: #000000;">
+                            <span class="segment-text">{{$mode}} ({{$count}})</span>
+                        </div>
+                    {{end}}
+                </div>
+
+                <!-- Legend -->
+                <div class="legend">
+                    {{range $mode, $count := .Result.Modes}}
+                        <div class="legend-item">
+                            <span class="legend-color" style="background-color: {{randomColor $mode}};"></span>
+                            <span class="legend-text">
+                                {{$mode}}: {{$count}} ({{formatPercentage (div (toFloat64 $count) (toFloat64 $.Result.TotalPlayers))}})
+                            </span>
+                        </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .distribution-container {
+                margin-top: 20px;
+            }
+
+            .stacked-bar {
+                height: 40px;
+                display: flex;
+                width: 100%;
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 15px;
+            }
+
+            .segment {
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 12px;
+                position: relative;
+                transition: width 0.3s ease;
+            }
+
+            .segment-text {
+                padding: 0 5px;
+                white-space: nowrap;
+                color: #000 !important;
+                text-shadow: 0 0 2px #fff;
+            }
+
+            .legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+
+            .legend-item {
+                display: flex;
+                align-items: center;
+            }
+
+            .legend-color {
+                width: 16px;
+                height: 16px;
+                margin-right: 8px;
+                border-radius: 3px;
+                border: 1px solid #ddd;
+            }
+
+            .legend-text {
+                font-size: 14px;
+                color: #333;
+            }
+        </style>
+    {{end}}
+{{end}}

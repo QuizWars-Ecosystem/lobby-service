@@ -33,10 +33,10 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  10_000,
+			PlayersCount:  50_000,
 			MaxRating:     10_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 50,
+			CategoryMaxID: 25,
 			Modes: []string{
 				"classic",
 				"battle",
@@ -52,8 +52,8 @@ func NewTestConfig() *TestConfig {
 				Address:      "lobby_address",
 				Local:        true,
 				GRPCPort:     50051,
-				StartTimeout: time.Second * 30,
-				StopTimeout:  time.Second * 30,
+				StartTimeout: time.Minute,
+				StopTimeout:  time.Minute,
 				ConsulURL:    "consul:8500",
 			},
 			Logger: &log.Config{
@@ -132,14 +132,14 @@ func NewTestConfig() *TestConfig {
 						CategoryWeight:   0.4,
 						FillWeight:       0.3,
 						MaxRatingDiff:    800,
-						MinCategoryMatch: 0.5,
+						MinCategoryMatch: 0.4,
 					},
 					"team": {
 						RatingWeight:     0.5,
 						CategoryWeight:   0.4,
 						FillWeight:       0.1,
 						MaxRatingDiff:    1000,
-						MinCategoryMatch: 0.7,
+						MinCategoryMatch: 0.4,
 					},
 					"mega": {
 						RatingWeight:     0.0,

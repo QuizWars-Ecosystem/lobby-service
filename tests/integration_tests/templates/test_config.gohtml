@@ -1,0 +1,85 @@
+{{define "test_config"}}
+    <div class="card">
+        <h2>Test Configuration</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Service Amount</h4>
+                <div class="value">{{.Config.ServerAmount}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Redis Nodes</h4>
+                <div class="value">{{.RedisNodes}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Players</h4>
+                <div class="value">{{.Config.Generator.PlayersCount}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Max Rating</h4>
+                <div class="value">{{.Config.Generator.MaxRating}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Categories per Player</h4>
+                <div class="value">{{.Config.Generator.CategoriesMax}}</div>
+            </div>
+        </div>
+
+        {{if and .Config.ServiceConfig .Config.ServiceConfig.Matcher}}
+            <h3>Matchmaking Configuration Heatmap</h3>
+            <div class="heatmap-grid">
+                <!-- Headers -->
+                <div class="header">Mode</div>
+                <div class="header">Rating Weight</div>
+                <div class="header">Category Weight</div>
+                <div class="header">Fill Weight</div>
+
+                {{range $mode, $mc := .Config.ServiceConfig.Matcher.Configs}}
+                    <!-- Row -->
+                    <div class="mode-cell">{{$mode}}</div>
+                    <div class="value-cell" style="background-color: {{heatmapColor $mc.RatingWeight 0 1}}">
+                        {{printf "%.2f" $mc.RatingWeight}}
+                    </div>
+                    <div class="value-cell" style="background-color: {{heatmapColor $mc.CategoryWeight 0 1}}">
+                        {{printf "%.2f" $mc.CategoryWeight}}
+                    </div>
+                    <div class="value-cell" style="background-color: {{heatmapColor $mc.FillWeight 0 1}}">
+                        {{printf "%.2f" $mc.FillWeight}}
+                    </div>
+                {{end}}
+            </div>
+
+            <style>
+                .heatmap-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 2px;
+                    margin-bottom: 20px;
+                    font-family: Arial, sans-serif;
+                }
+
+                .header {
+                    padding: 10px;
+                    background-color: #2c3e50;
+                    color: white;
+                    font-weight: bold;
+                    text-align: center;
+                }
+
+                .mode-cell {
+                    padding: 10px;
+                    background-color: #34495e;
+                    color: white;
+                    font-weight: bold;
+                }
+
+                .value-cell {
+                    padding: 10px;
+                    text-align: center;
+                    font-weight: bold;
+                    color: #000 !important;
+                    text-shadow: 0 0 2px rgba(255,255,255,0.7);
+                }
+            </style>
+        {{end}}
+    </div>
+{{end}}

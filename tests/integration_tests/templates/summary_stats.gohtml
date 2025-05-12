@@ -1,0 +1,50 @@
+{{define "summary_stats"}}
+    <div class="card">
+        <h2>Summary Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Total Players</h4>
+                <div class="value">{{.Result.TotalPlayers}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Lobbies</h4>
+                <div class="value">{{.LobbiesCount}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Started Lobbies</h4>
+                <div class="value">{{len .Result.Starter}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.Starter)) (toFloat64 .LobbiesCount))}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Players in Lobbies</h4>
+                <div class="value">{{.PlayersInLobbies}} {{(formatPercentage (div (toFloat64Int32 .PlayersInLobbies) (toFloat64 .Result.TotalPlayers)))}}</div>
+                <div class="st-progress-container">
+                    <div class="st-progress-bar" style="width: {{div (toFloat64Int32 .PlayersInLobbies) (toFloat64 .Result.TotalPlayers)}}%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h4>Waited Players</h4>
+                <div class="value">{{len .Result.WaitedPlayers}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.WaitedPlayers)) (toFloat64 .Result.TotalPlayers))}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Expired Lobbies</h4>
+                <div class="value">{{len .Result.Expired}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.Expired)) (toFloat64 .LobbiesCount))}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Errored Lobbies</h4>
+                <div class="value">{{len .Result.Errored}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.Errored)) (toFloat64 .LobbiesCount))}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Requesting Duration</h4>
+                <div class="value">{{printf "%.1fs" (durationSeconds .Result.StartedAt .Result.FinishRequesting)}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Test Duration</h4>
+                <div class="value">{{printf "%.1fs" (durationSeconds .Result.StartedAt .Result.FinishedAt)}}</div>
+            </div>
+        </div>
+    </div>
+{{end}}

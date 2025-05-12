@@ -9,8 +9,8 @@ import (
 const (
 	startedStatus = "started"
 	waitedStatus  = "waited"
-	erroredStatus = "errored"
-	expiredStatus = "expired"
+	erroredStatus = "Errored"
+	expiredStatus = "Expired"
 )
 
 type LobbyStatCreator struct {
@@ -25,66 +25,66 @@ type LobbyStatCreator struct {
 }
 
 type LobbyStat struct {
-	mode          string
+	Mode          string
 	playersMu     sync.Mutex
-	players       int32
-	maxPlayers    int32
+	Players       int32
+	MaxPlayers    int32
 	ratingMu      sync.RWMutex
-	ratingSet     map[string]int32
+	RatingSet     map[string]int32
 	categoriesMu  sync.RWMutex
 	categoriesSet map[string][]int32
-	createdAt     time.Time
+	CreatedAt     time.Time
 	startedMu     sync.Mutex
-	startedAt     time.Time
+	StartedAt     time.Time
 	statusMu      sync.Mutex
-	status        string
+	Status        string
 }
 
 type Result struct {
-	totalPlayers     int
-	lobbiesMu        sync.RWMutex
-	lobbies          map[string]*LobbyStat
+	TotalPlayers     int
+	LobbiesMu        sync.RWMutex
+	Lobbies          map[string]*LobbyStat
 	modesMu          sync.RWMutex
-	modes            map[string]int
+	Modes            map[string]int
 	startedMu        sync.RWMutex
-	starter          map[string]struct{}
+	Starter          map[string]struct{}
 	waitedMu         sync.RWMutex
-	waitedPlayers    map[string]struct{}
+	WaitedPlayers    map[string]struct{}
 	expiredMu        sync.RWMutex
-	expired          map[string]struct{}
+	Expired          map[string]struct{}
 	expiredPlayersMu sync.RWMutex
-	expiredPlayers   map[string]struct{}
+	ExpiredPlayers   map[string]struct{}
 	erroredMu        sync.RWMutex
-	errored          map[string]struct{}
+	Errored          map[string]struct{}
 	erroredPlayersMu sync.RWMutex
-	erroredPlayers   map[string]struct{}
+	ErroredPlayers   map[string]struct{}
 
-	cfg *config.TestConfig
+	Cfg *config.TestConfig
 
-	startedAt        time.Time
-	finishedAt       time.Time
-	finishRequesting time.Time
+	StartedAt        time.Time
+	FinishedAt       time.Time
+	FinishRequesting time.Time
 }
 
 func NewResult(playersCount int, cfg *config.TestConfig) *Result {
 	return &Result{
-		totalPlayers:   playersCount,
-		lobbies:        make(map[string]*LobbyStat, playersCount/4),
-		modes:          make(map[string]int, playersCount/4),
-		starter:        make(map[string]struct{}, playersCount/10),
-		waitedPlayers:  make(map[string]struct{}, playersCount/10),
-		expired:        make(map[string]struct{}),
-		expiredPlayers: make(map[string]struct{}),
-		errored:        make(map[string]struct{}),
-		erroredPlayers: make(map[string]struct{}),
-		cfg:            cfg,
-		startedAt:      time.Now(),
-		finishedAt:     time.Now(),
+		TotalPlayers:   playersCount,
+		Lobbies:        make(map[string]*LobbyStat, playersCount/4),
+		Modes:          make(map[string]int, playersCount/4),
+		Starter:        make(map[string]struct{}, playersCount/10),
+		WaitedPlayers:  make(map[string]struct{}, playersCount/10),
+		Expired:        make(map[string]struct{}),
+		ExpiredPlayers: make(map[string]struct{}),
+		Errored:        make(map[string]struct{}),
+		ErroredPlayers: make(map[string]struct{}),
+		Cfg:            cfg,
+		StartedAt:      time.Now(),
+		FinishedAt:     time.Now(),
 	}
 }
 
 func (r *Result) Freeze() {
-	r.lobbiesMu.Lock()
+	r.LobbiesMu.Lock()
 	r.modesMu.Lock()
 	r.startedMu.Lock()
 	r.waitedMu.Lock()
@@ -102,110 +102,110 @@ func (r *Result) Unfreeze() {
 	r.waitedMu.Unlock()
 	r.startedMu.Unlock()
 	r.modesMu.Unlock()
-	r.lobbiesMu.Unlock()
+	r.LobbiesMu.Unlock()
 }
 
 func (r *Result) GetOrCreateLobby(id string, creator func() LobbyStatCreator) *LobbyStat {
-	r.lobbiesMu.RLock()
-	lobby, exists := r.lobbies[id]
-	r.lobbiesMu.RUnlock()
+	r.LobbiesMu.RLock()
+	lobby, exists := r.Lobbies[id]
+	r.LobbiesMu.RUnlock()
 	if exists {
 		return lobby
 	}
 
-	r.lobbiesMu.Lock()
-	defer r.lobbiesMu.Unlock()
-	if lobby, exists = r.lobbies[id]; exists {
+	r.LobbiesMu.Lock()
+	defer r.LobbiesMu.Unlock()
+	if lobby, exists = r.Lobbies[id]; exists {
 		return lobby
 	}
 
 	newLobbySample := creator()
 	newLobby := &LobbyStat{
-		mode:          newLobbySample.Mode,
-		players:       int32(newLobbySample.Players),
-		maxPlayers:    int32(newLobbySample.MaxPlayers),
-		ratingSet:     newLobbySample.RatingSet,
+		Mode:          newLobbySample.Mode,
+		Players:       int32(newLobbySample.Players),
+		MaxPlayers:    int32(newLobbySample.MaxPlayers),
+		RatingSet:     newLobbySample.RatingSet,
 		categoriesSet: newLobbySample.CategoriesSet,
-		createdAt:     newLobbySample.CreatedAt,
-		startedAt:     newLobbySample.StartedAt,
-		status:        newLobbySample.Status,
+		CreatedAt:     newLobbySample.CreatedAt,
+		StartedAt:     newLobbySample.StartedAt,
+		Status:        newLobbySample.Status,
 	}
 
-	r.lobbies[id] = newLobby
+	r.Lobbies[id] = newLobby
 	return newLobby
 }
 
 func (r *Result) Start() {
-	r.startedAt = time.Now()
+	r.StartedAt = time.Now()
 }
 
 func (r *Result) Finish() {
-	r.finishedAt = time.Now()
+	r.FinishedAt = time.Now()
 }
 
-func (r *Result) FinishRequesting() {
-	r.finishRequesting = time.Now()
+func (r *Result) FinishRequestingMethod() {
+	r.FinishRequesting = time.Now()
 }
 
 func (r *Result) ModeInc(mode string) *Result {
 	r.modesMu.Lock()
 	defer r.modesMu.Unlock()
-	r.modes[mode]++
+	r.Modes[mode]++
 	return r
 }
 
 func (r *Result) AddStartedLobby(id string) *Result {
 	r.startedMu.Lock()
 	defer r.startedMu.Unlock()
-	r.starter[id] = struct{}{}
+	r.Starter[id] = struct{}{}
 	return r
 }
 
 func (r *Result) AddWaitedPlayer(id string) *Result {
 	r.waitedMu.Lock()
 	defer r.waitedMu.Unlock()
-	r.waitedPlayers[id] = struct{}{}
+	r.WaitedPlayers[id] = struct{}{}
 	return r
 }
 
 func (r *Result) AddExpiredLobby(id string) *Result {
 	r.expiredMu.Lock()
 	defer r.expiredMu.Unlock()
-	r.expired[id] = struct{}{}
+	r.Expired[id] = struct{}{}
 	return r
 }
 
 func (r *Result) AddExpiredPlayer(id string) *Result {
 	r.expiredPlayersMu.Lock()
 	defer r.expiredPlayersMu.Unlock()
-	r.expiredPlayers[id] = struct{}{}
+	r.ExpiredPlayers[id] = struct{}{}
 	return r
 }
 
 func (r *Result) AddErroredLobby(id string) *Result {
 	r.erroredMu.Lock()
 	defer r.erroredMu.Unlock()
-	r.errored[id] = struct{}{}
+	r.Errored[id] = struct{}{}
 	return r
 }
 
 func (r *Result) AddErroredPlayer(id string) *Result {
 	r.erroredPlayersMu.Lock()
 	defer r.erroredPlayersMu.Unlock()
-	r.erroredPlayers[id] = struct{}{}
+	r.ErroredPlayers[id] = struct{}{}
 	return r
 }
 
 func (l *LobbyStat) SetCurrentPlayers(players int32) *LobbyStat {
 	l.playersMu.Lock()
-	l.players = players
+	l.Players = players
 	l.playersMu.Unlock()
 	return l
 }
 
 func (l *LobbyStat) AddRating(id string, val int32) *LobbyStat {
 	l.ratingMu.RLock()
-	_, exists := l.ratingSet[id]
+	_, exists := l.RatingSet[id]
 	l.ratingMu.RUnlock()
 
 	if exists {
@@ -214,7 +214,7 @@ func (l *LobbyStat) AddRating(id string, val int32) *LobbyStat {
 
 	l.ratingMu.Lock()
 	defer l.ratingMu.Unlock()
-	l.ratingSet[id] = val
+	l.RatingSet[id] = val
 	return l
 }
 
@@ -235,11 +235,11 @@ func (l *LobbyStat) AddCategories(id string, vals []int32) *LobbyStat {
 
 func (l *LobbyStat) SetAsStarted() *LobbyStat {
 	l.startedMu.Lock()
-	l.startedAt = time.Now()
+	l.StartedAt = time.Now()
 	l.startedMu.Unlock()
 
 	l.statusMu.Lock()
-	l.status = startedStatus
+	l.Status = startedStatus
 	l.statusMu.Unlock()
 	return l
 }
@@ -247,20 +247,20 @@ func (l *LobbyStat) SetAsStarted() *LobbyStat {
 func (l *LobbyStat) SetAsWaited() *LobbyStat {
 	l.statusMu.Lock()
 	defer l.statusMu.Unlock()
-	l.status = waitedStatus
+	l.Status = waitedStatus
 	return l
 }
 
 func (l *LobbyStat) SetAsExpired() *LobbyStat {
 	l.statusMu.Lock()
 	defer l.statusMu.Unlock()
-	l.status = expiredStatus
+	l.Status = expiredStatus
 	return l
 }
 
 func (l *LobbyStat) SetAsErrored() *LobbyStat {
 	l.statusMu.Lock()
 	defer l.statusMu.Unlock()
-	l.status = erroredStatus
+	l.Status = erroredStatus
 	return l
 }

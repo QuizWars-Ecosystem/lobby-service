@@ -12,36 +12,38 @@ import (
 )
 
 type statRow struct {
-	id           string
-	mode         string
-	count        int
-	max          int
-	avgRating    float64
-	minRating    int32
-	maxRating    int32
-	commonCats   []int
-	uniqueCats   []int
-	waitDuration string
-	status       string
+	id            string
+	mode          string
+	count         int
+	max           int
+	avgRating     float64
+	minRating     int32
+	maxRating     int32
+	commonCats    []int
+	uniqueCats    []int
+	waitDuration  string
+	status        string
+	ratingSet     map[string]int32
+	categoriesSet map[string][]int32
 }
 
 func (r *Result) LogStatsPrint() {
-	rowsByMode := make(map[string][]statRow, len(r.modes))
+	rowsByMode := make(map[string][]statRow, len(r.Modes))
 	var playersInLobbies int32
 	var lobbiesCount int
 
 	threshold := 0.6
 
-	for id, lobby := range r.lobbies {
+	for id, lobby := range r.Lobbies {
 		lobbiesCount++
-		playersInLobbies += lobby.players
+		playersInLobbies += lobby.Players
 
 		// Rating stats
 		var sum int32
 		minInt := int32(math.MaxInt32)
 		maxInt := int32(math.MinInt32)
 
-		for _, rating := range lobby.ratingSet {
+		for _, rating := range lobby.RatingSet {
 			sum += rating
 			if rating < minInt {
 				minInt = rating
@@ -52,8 +54,8 @@ func (r *Result) LogStatsPrint() {
 		}
 
 		avg := 0.0
-		if len(lobby.ratingSet) > 0 {
-			avg = float64(sum) / float64(len(lobby.ratingSet))
+		if len(lobby.RatingSet) > 0 {
+			avg = float64(sum) / float64(len(lobby.RatingSet))
 		}
 
 		numPlayers := len(lobby.categoriesSet)
@@ -84,8 +86,8 @@ func (r *Result) LogStatsPrint() {
 		sort.Ints(uniqueSlice)
 
 		waitDur := "-"
-		if !lobby.startedAt.IsZero() && !lobby.createdAt.IsZero() {
-			dur := lobby.startedAt.Sub(lobby.createdAt)
+		if !lobby.StartedAt.IsZero() && !lobby.CreatedAt.IsZero() {
+			dur := lobby.StartedAt.Sub(lobby.CreatedAt)
 			if dur < time.Second {
 				waitDur = "<1s"
 			} else {
@@ -94,7 +96,7 @@ func (r *Result) LogStatsPrint() {
 		}
 
 		statusDef := "-"
-		switch lobby.status {
+		switch lobby.Status {
 		case startedStatus:
 			statusDef = "STARTED"
 		case expiredStatus:
@@ -105,9 +107,9 @@ func (r *Result) LogStatsPrint() {
 
 		row := statRow{
 			id:           id,
-			mode:         lobby.mode,
-			count:        int(lobby.players),
-			max:          int(lobby.maxPlayers),
+			mode:         lobby.Mode,
+			count:        int(lobby.Players),
+			max:          int(lobby.MaxPlayers),
 			avgRating:    avg,
 			minRating:    minInt,
 			maxRating:    maxInt,
@@ -117,7 +119,7 @@ func (r *Result) LogStatsPrint() {
 			status:       statusDef,
 		}
 
-		rowsByMode[lobby.mode] = append(rowsByMode[lobby.mode], row)
+		rowsByMode[lobby.Mode] = append(rowsByMode[lobby.Mode], row)
 	}
 
 	// ===== Summary table =====
@@ -126,23 +128,23 @@ func (r *Result) LogStatsPrint() {
 	summary.SetStyle(table.StyleRounded)
 	summary.AppendHeader(table.Row{"📊 Metric", "📈 Value"})
 	summary.AppendRows([]table.Row{
-		{"👥 Total Players", r.totalPlayers},
+		{"👥 Total Players", r.TotalPlayers},
 		{"🏟️ Total Lobbies", lobbiesCount},
-		{"🚀 Started Lobbies", len(r.starter)},
-		{"🔁 Waited Players", len(r.waitedPlayers)},
-		{"⌛ Expired Lobbies", len(r.expired)},
-		{"⌛ Expired Players", len(r.expiredPlayers)},
-		{"❌ Errored Lobbies", len(r.errored)},
-		{"❌ Errored Players", len(r.erroredPlayers)},
-		{"👥 Players in Lobbies", fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.totalPlayers)*100)},
-		{"⌛️ Requesting Duration", fmt.Sprintf(r.finishRequesting.Sub(r.startedAt).Truncate(time.Second).String())},
-		{"⌛️ Test Duration", fmt.Sprintf(r.finishedAt.Sub(r.startedAt).Truncate(time.Second).String())},
+		{"🚀 Started Lobbies", len(r.Starter)},
+		{"🔁 Waited Players", len(r.WaitedPlayers)},
+		{"⌛ Expired Lobbies", len(r.Expired)},
+		{"⌛ Expired Players", len(r.ExpiredPlayers)},
+		{"❌ Errored Lobbies", len(r.Errored)},
+		{"❌ Errored Players", len(r.ErroredPlayers)},
+		{"👥 Players in Lobbies", fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100)},
+		{"⌛️ Requesting Duration", fmt.Sprintf(r.FinishRequesting.Sub(r.StartedAt).Truncate(time.Second).String())},
+		{"⌛️ Test Duration", fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String())},
 	})
 	summary.Render()
 	fmt.Println()
 
 	// ===== Mode distribution table =====
-	modeCount := len(r.modes)
+	modeCount := len(r.Modes)
 
 	if modeCount > 0 {
 		modeTbl := table.NewWriter()
@@ -152,14 +154,14 @@ func (r *Result) LogStatsPrint() {
 		modeTbl.SetStyle(table.StyleLight)
 
 		var modes []string
-		for m := range r.modes {
+		for m := range r.Modes {
 			modes = append(modes, m)
 		}
 
 		sort.Strings(modes)
 
 		for _, mode := range modes {
-			if count, ok := r.modes[mode]; ok {
+			if count, ok := r.Modes[mode]; ok {
 				modeTbl.AppendRow([]interface{}{mode, count})
 			}
 		}
@@ -170,7 +172,7 @@ func (r *Result) LogStatsPrint() {
 
 	// ===== Lobbies by Mode =====
 	if len(rowsByMode) == 0 {
-		fmt.Println("ℹ️  No active lobbies.")
+		fmt.Println("ℹ️  No active Lobbies.")
 		return
 	}
 

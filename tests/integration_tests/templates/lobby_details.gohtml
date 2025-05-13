@@ -57,10 +57,8 @@
                                 data-categories-set="{{json $lobby.CategoriesSet}}">
                                 <td>{{$lobby.ID}}</td>
                                 <td>
-                                    <div class="match-percent-circle"
-                                         style="--percent: {{mul $lobby.CategoryMatchValue 100}};
-                                                 --color: {{if $lobby.CategoryMatchValid}}#4CAF50{{else}}#F44336{{end}}">
-                                        {{printf "%.0f" (mul $lobby.CategoryMatchValue 100)}}%
+                                    <div class="match-percent-circle" style="--percent: {{mul $lobby.OverallValue 100}}">
+                                        <span>{{printf "%.0f" (mul $lobby.OverallValue 100)}}%</span>
                                     </div>
                                 </td>
                                 <td>{{$lobby.PlayersCount}}/{{$lobby.MaxPlayers}}</td>
@@ -107,22 +105,38 @@
             background-color: #45a049;
         }
 
-        /* Круг с процентом */
         .match-percent-circle {
+            --color: hsl(calc(var(--percent) * 1.2), 100%, 45%);
             width: 40px;
             height: 40px;
             border-radius: 50%;
             background: conic-gradient(
                     var(--color) calc(var(--percent) * 1%),
-                    #eee calc(var(--percent) * 1%)
+                    #eee 0
             );
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #333;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .match-percent-circle::before {
+            content: '';
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        .match-percent-circle span {
+            position: relative;
+            z-index: 1;
             font-size: 10px;
             font-weight: bold;
-            margin: 0 auto;
+            color: #333;
         }
 
         /* Модальное окно */
@@ -242,6 +256,11 @@
             const rounded = Math.min(100, Math.max(0, Math.floor(percent / 10) * 10));
             return `match-percent-${rounded}`;
         }
+
+        document.querySelectorAll('.match-percent-circle').forEach(circle => {
+            const percent = circle.style.getPropertyValue('--percent');
+            circle.style.setProperty('--percent-percent', percent + '%');
+        });
 
         document.addEventListener('DOMContentLoaded', function () {
             const modal = document.getElementById('lobbyModal');

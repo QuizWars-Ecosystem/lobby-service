@@ -1,9 +1,10 @@
 package modules
 
 import (
-	"github.com/google/uuid"
 	"math/rand/v2"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 )

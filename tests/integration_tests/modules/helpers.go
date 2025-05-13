@@ -3,15 +3,16 @@ package modules
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"sync"
+	"time"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"log/slog"
-	"sync"
-	"time"
 )
 
 func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyStatus], r *report.Result, wg *sync.WaitGroup, cancelCtxFn func()) {

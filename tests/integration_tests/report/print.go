@@ -2,13 +2,14 @@ package report
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"math"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 type statRow struct {

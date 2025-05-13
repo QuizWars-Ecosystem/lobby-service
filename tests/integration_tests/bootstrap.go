@@ -3,11 +3,12 @@ package integration_tests
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/testing/containers"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"testing"
 )
 
 type runServerFn func(t *testing.T, cfg *config.TestConfig)

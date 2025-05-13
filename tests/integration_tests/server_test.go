@@ -1,6 +1,8 @@
 package integration_tests
 
 import (
+	"testing"
+
 	test "github.com/QuizWars-Ecosystem/go-common/pkg/testing/server"
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/server"
@@ -8,7 +10,6 @@ import (
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/modules"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func Test(t *testing.T) {

@@ -1,9 +1,10 @@
 package matcher
 
 import (
+	"sync"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
-	"sync"
 )
 
 type Scorer interface {

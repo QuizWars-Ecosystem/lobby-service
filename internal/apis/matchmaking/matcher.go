@@ -1,10 +1,11 @@
 package matchmaking
 
 import (
+	"sync"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
-	"sync"
 )
 
 var _ abstractions.ConfigSubscriber[*matcher.Config] = (*Matcher)(nil)

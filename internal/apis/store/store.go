@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/scorer"
 	"github.com/go-redsync/redsync/v4"
 	redsyncgoredis "github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const (
@@ -58,7 +59,7 @@ func (s *Store) AddLobby(ctx context.Context, lobby *models.Lobby) error {
 
 	score := sp.CalculateScore(lobby)
 
-	//s.logger.Info("Lobby data", zap.String("lobby_id", lobby.ID), zap.String("mode", lobby.Mode), zap.Int16("version", lobby.Version), zap.Float64("score", score), zap.Int32s("categories", lobby.Categories))
+	// s.logger.Info("Lobby data", zap.String("lobby_id", lobby.ID), zap.String("mode", lobby.Mode), zap.Int16("version", lobby.Version), zap.Float64("score", score), zap.Int32s("categories", lobby.Categories))
 
 	data, err := json.Marshal(lobby)
 	if err != nil {
@@ -314,7 +315,7 @@ func (s *Store) loadLobbiesByIDs(ctx context.Context, mode string, ids []string)
 	for pairs := range resultCh {
 		for i, p := range pairs {
 			if p.Val == nil {
-				//s.logger.Warn("Skipping missing lobby", zap.String("id", ids[i]))
+				// s.logger.Warn("Skipping missing lobby", zap.String("id", ids[i]))
 				missingKeys = append(missingKeys, fmt.Sprintf(lobbyKey, ids[i]))
 				continue
 			}
@@ -339,7 +340,6 @@ func (s *Store) loadLobbiesByIDs(ctx context.Context, mode string, ids []string)
 	defer func() {
 		activeLobbiesKey := fmt.Sprintf(activeLobbyKey, mode)
 		if len(missingKeys) > 0 {
-
 			if _, err := s.db.ZRem(ctx, activeLobbiesKey, missingKeys...).Result(); err != nil {
 				s.logger.Warn("Failed to clean up broken lobby references", zap.Error(err))
 			}

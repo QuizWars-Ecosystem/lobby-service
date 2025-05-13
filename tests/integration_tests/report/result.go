@@ -1,9 +1,10 @@
 package report
 
 import (
-	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"sync"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 )
 
 const (

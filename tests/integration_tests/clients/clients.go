@@ -3,13 +3,14 @@ package clients
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	test "github.com/QuizWars-Ecosystem/go-common/pkg/testing/server"
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"google.golang.org/grpc"
-	"sync"
-	"testing"
-	"time"
 )
 
 type ServerSet struct {

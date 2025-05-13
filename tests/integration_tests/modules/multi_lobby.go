@@ -2,11 +2,12 @@ package modules
 
 import (
 	"context"
-	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/clients"
-	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/clients"
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/report"
 
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"

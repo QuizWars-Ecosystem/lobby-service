@@ -2,10 +2,11 @@ package handler
 
 import (
 	"context"
-	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
-	"github.com/jaevor/go-nanoid"
 	"sync"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
+	"github.com/jaevor/go-nanoid"
 
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
@@ -95,7 +96,7 @@ func (h *Handler) JoinLobby(request *lobbyv1.JoinLobbyRequest, stream grpc.Serve
 		}
 
 		if err = h.store.AddPlayer(ctx, selectedLobby.ID, player); err != nil {
-			//h.logger.Debug("Failed adding player to lobby", zap.String("lobby_id", selectedLobby.ID))
+			// h.logger.Debug("Failed adding player to lobby", zap.String("lobby_id", selectedLobby.ID))
 			continue
 		}
 

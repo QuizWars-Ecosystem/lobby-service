@@ -1,20 +1,19 @@
 package scorer
 
 import (
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"sync"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 )
 
-var (
-	defaultProviders = map[string]Provider{
-		"classic": &StandardScoreProvider{},
-		"battle":  &BattleScoreProvider{},
-		"blitz":   &BlitzScoreProvider{},
-		"mega":    &MegaScoreProvider{},
-		"team":    &TeamScoreProvider{},
-		"dual":    &DuelScoreProvider{},
-	}
-)
+var defaultProviders = map[string]Provider{
+	"classic": &StandardScoreProvider{},
+	"battle":  &BattleScoreProvider{},
+	"blitz":   &BlitzScoreProvider{},
+	"mega":    &MegaScoreProvider{},
+	"team":    &TeamScoreProvider{},
+	"dual":    &DuelScoreProvider{},
+}
 
 type Provider interface {
 	CalculateScore(lobby *models.Lobby) float64

@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
 
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
 

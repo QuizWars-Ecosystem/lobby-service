@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/grpcx/telemetry"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/handler"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/lobby"
@@ -14,8 +17,6 @@ import (
 	grpcrecovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"net"
-	"net/http"
 
 	manager "github.com/QuizWars-Ecosystem/go-common/pkg/config"
 	grpccommon "github.com/QuizWars-Ecosystem/go-common/pkg/grpcx/metrics"

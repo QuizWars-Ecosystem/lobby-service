@@ -3,7 +3,6 @@ package report
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"hash/crc32"
 	"html/template"
 	"math"
@@ -11,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 )
 
 type TemplateData struct {

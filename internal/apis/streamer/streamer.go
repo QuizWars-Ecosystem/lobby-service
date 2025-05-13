@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"sync"
-	"time"
 )
 
 const (
@@ -86,7 +87,6 @@ func (s *StreamManager) RegisterStreamWithSubscription(
 			return
 		}
 	})
-
 	if err != nil {
 		s.logger.Error("Failed to subscribe to NATS channel", zap.String("subject", subject), zap.Error(err))
 		return

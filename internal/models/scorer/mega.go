@@ -1,8 +1,9 @@
 package scorer
 
 import (
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"time"
+
+	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 )
 
 type MegaScoreProvider struct{}

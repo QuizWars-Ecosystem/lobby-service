@@ -1,9 +1,10 @@
 package score
 
 import (
+	"sync"
+
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/scorer"
-	"sync"
 )
 
 type Provider struct {

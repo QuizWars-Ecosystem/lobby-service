@@ -51,7 +51,7 @@
                         {{printf "%.1f" $mc.MaxRatingDiff}}
                     </div>
                     <div class="value-cell" style="background-color: {{heatmapColor $mc.MinCategoryMatch 0 1}}">
-                        {{printf "%.2f" mul $mc.MinCategoryMatch 100}}
+                        {{printf "%.2f" $mc.MinCategoryMatch}}
                     </div>
                 {{end}}
             </div>
@@ -59,7 +59,7 @@
             <style>
                 .heatmap-grid {
                     display: grid;
-                    grid-template-columns: repeat(4, 1fr);
+                    grid-template-columns: repeat(6, 1fr);
                     gap: 2px;
                     margin-bottom: 20px;
                     font-family: Arial, sans-serif;

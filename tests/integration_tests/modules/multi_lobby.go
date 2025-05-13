@@ -36,7 +36,7 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 		for i := 0; i < workers; i++ {
 			go func() {
 				for p := range in {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Minute*4)
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
 
 					stream, err := manager.GetClient().JoinLobby(ctx, &lobbyv1.JoinLobbyRequest{
 						PlayerId:    p.id,

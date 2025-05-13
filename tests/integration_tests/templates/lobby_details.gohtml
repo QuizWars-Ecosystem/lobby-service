@@ -14,6 +14,7 @@
                         <thead>
                         <tr>
                             <th onclick="sortLobbyTable(this, '{{$mode}}', 'id')">Lobby ID</th>
+                            <th onclick="sortLobbyTable(this, '{{$mode}}', 'match')">Match %</th>
                             <th onclick="sortLobbyTable(this, '{{$mode}}', 'players')">Players</th>
                             <th onclick="sortLobbyTable(this, '{{$mode}}', 'avgRating')">Avg Rating</th>
                             <th onclick="sortLobbyTable(this, '{{$mode}}', 'minRating')">Min Rating</th>
@@ -33,28 +34,23 @@
                                 data-min-rating="{{$lobby.MinRating}}"
                                 data-max-rating="{{$lobby.MaxRating}}"
                                 data-wait-time="{{$lobby.WaitDuration}}"
-                                data-status="{{$lobby.Status}}">
+                                data-status="{{$lobby.Status}}"
+                                data-rating-diff="{{$lobby.RatingDiffValue}}"
+                                data-category-match="{{$lobby.CategoryMatchValue}}"
+                                data-rating-diff-valid="{{$lobby.RatingDiffValid}}"
+                                data-category-match-valid="{{$lobby.CategoryMatchValid}}"
+                                data-common-cats="{{json $lobby.CommonCats}}"
+                                data-unique-cats="{{json $lobby.UniqueCats}}">
                                 <td>{{$lobby.ID}}</td>
                                 <td>
-                                    <span class="badge {{if $lobby.MatchConditions.RatingDiffValid}}badge-success{{else}}badge-danger{{end}}"
-                                          title="Rating diff: {{printf "%.0f" $lobby.MatchConditions.RatingDiffValue}} (max {{index $.Config.ServiceConfig.Matcher.Configs $lobby.Mode}}.MaxRatingDiff)">
-                                        <i class="fas fa-chart-line"></i>
-                                    </span>
-                                                                    <span class="badge {{if $lobby.MatchConditions.CategoryMatchValid}}badge-success{{else if lt $lobby.MatchConditions.CategoryMatchValue 0.2}}badge-danger{{else if lt $lobby.MatchConditions.CategoryMatchValue 0.4}}badge-warning{{else}}badge-info{{end}}"
-                                                                          title="Category match: {{printf "%.0f" (mul $lobby.MatchConditions.CategoryMatchValue 100)}}% (min {{mul (index $.Config.ServiceConfig.Matcher.Configs $lobby.Mode).MinCategoryMatch 100}}%)">
-                                        <i class="fas fa-tags"></i>
-                                    </span>
-                                </td>
-                                <td>
                                     {{template "match_condition_chart" (dict
-                                    "OverallValid" $lobby.MatchConditions.OverallValid
-                                    "RatingDiffValue" $lobby.MatchConditions.RatingDiffValue
-                                    "CategoryMatchValue" $lobby.MatchConditions.CategoryMatchValue
+                                    "OverallValid" $lobby.OverallValid
+                                    "RatingDiffValue" $lobby.RatingDiffValue
+                                    "CategoryMatchValue" $lobby.CategoryMatchValue
                                     "Mode" $lobby.Mode
                                     "Config" $.Config
                                     )}}
                                 </td>
-                                <th onclick="sortLobbyTable(this, '{{$mode}}', 'match')">Match %</th>
                                 <td>{{$lobby.PlayersCount}}/{{$lobby.MaxPlayers}}</td>
                                 <td>{{printf "%.0f" $lobby.AvgRating}}</td>
                                 <td>{{$lobby.MinRating}}</td>
@@ -72,108 +68,262 @@
                 </div>
             {{end}}
         </div>
-        {{template "lobby_modal" .}}
+    </div>
+
+    <!-- Модальное окно для деталей лобби -->
+    <div id="lobbyModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="modalContent"></div>
+        </div>
     </div>
 
     <script>
+        // Функция для определения класса процента соответствия
+        function getMatchPercentClass(percent) {
+            const rounded = Math.min(100, Math.max(0, Math.floor(percent / 10) * 10));
+            return `match-percent-${rounded}`;
+        }
+
+        // Обработчик клика по кнопке View Details
         document.addEventListener('DOMContentLoaded', function() {
+            // Обработчик закрытия модального окна
+            document.querySelector('.modal .close').addEventListener('click', function() {
+                document.getElementById('lobbyModal').style.display = 'none';
+            });
+
             document.addEventListener('click', function(e) {
                 if (e.target.classList.contains('view-lobby-btn')) {
-                    const lobbyId = e.target.getAttribute('data-lobby-id');
-
-                    if (!window.lobbyDataRegistry || !window.lobbyDataRegistry.isReady()) {
-                        console.error('Lobby data not initialized');
-                        return;
-                    }
-
-                    const lobby = window.lobbyDataRegistry.getLobby(lobbyId);
-                    if (!lobby) {
-                        console.error('Lobby not found:', lobbyId);
-                        return;
-                    }
-
-                    // Заполнение модального окна
+                    const row = e.target.closest('tr');
                     const modal = document.getElementById('lobbyModal');
                     const content = document.getElementById('modalContent');
 
-                    content.innerHTML = `
-                <h3>Lobby ${lobby.id}</h3>
-                <div class="lobby-meta">
-                    <p><strong>Mode:</strong> ${lobby.mode}</p>
-                    <p><strong>Players:</strong> ${lobby.playersCount}/${lobby.maxPlayers}</p>
-                    <p><strong>Status:</strong> <span class="${lobby.statusClass}">${lobby.status}</span></p>
-                </div>
+                    // Получаем все данные из data-атрибутов
+                    const lobbyData = {
+                        id: row.getAttribute('data-id'),
+                        mode: row.closest('.tab-content').id,
+                        playersCount: row.getAttribute('data-players'),
+                        maxPlayers: row.getAttribute('data-max-players'),
+                        avgRating: row.getAttribute('data-avg-rating'),
+                        minRating: row.getAttribute('data-min-rating'),
+                        maxRating: row.getAttribute('data-max-rating'),
+                        waitTime: row.getAttribute('data-wait-time'),
+                        status: row.getAttribute('data-status'),
+                        statusClass: row.querySelector('.badge').className,
+                        ratingDiff: parseFloat(row.getAttribute('data-rating-diff')),
+                        categoryMatch: parseFloat(row.getAttribute('data-category-match')),
+                        ratingDiffValid: row.getAttribute('data-rating-diff-valid') === 'true',
+                        categoryMatchValid: row.getAttribute('data-category-match-valid') === 'true',
+                        commonCats: JSON.parse(row.getAttribute('data-common-cats')),
+                        uniqueCats: JSON.parse(row.getAttribute('data-unique-cats'))
+                    };
 
-                <h4>Players</h4>
-                <table class="players-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Rating</th>
-                            <th>Categories</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${lobby.players.map(player => `
-                            <tr>
-                                <td>${player.id}</td>
-                                <td>${player.rating}</td>
-                                <td>${player.categories.join(', ')}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+                    // Получаем конфиг для этого режима
+                    const modeConfig = {
+                        {{range $mode, $cfg := .Config.ServiceConfig.Matcher.Configs}}
+                        '{{$mode}}': {
+                            maxRatingDiff: {{$cfg.MaxRatingDiff}},
+                            minCategoryMatch: {{$cfg.MinCategoryMatch}},
+                            ratingWeight: {{$cfg.RatingWeight}},
+                            categoryWeight: {{$cfg.CategoryWeight}},
+                            fillWeight: {{$cfg.FillWeight}}
+                        },
+                        {{end}}
+                    }[lobbyData.mode] || {
+                        maxRatingDiff: 1000,
+                        minCategoryMatch: 0.3,
+                        ratingWeight: 0.3,
+                        categoryWeight: 0.5,
+                        fillWeight: 0.2
+                    };
+
+                    // Формируем HTML для модального окна
+                    content.innerHTML = `
+                        <h2>Lobby Details: ${lobbyData.id}</h2>
+
+                        <div class="lobby-summary">
+                            <div class="summary-item">
+                                <span class="label">Mode:</span>
+                                <span class="value">${lobbyData.mode}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Players:</span>
+                                <span class="value">${lobbyData.playersCount}/${lobbyData.maxPlayers}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Status:</span>
+                                <span class="value badge ${lobbyData.statusClass}">${lobbyData.status}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Wait Time:</span>
+                                <span class="value">${lobbyData.waitTime}</span>
+                            </div>
+                        </div>
+
+                        <h3>Match Conditions</h3>
+                        <table class="conditions-table">
+                            <thead>
+                                <tr>
+                                    <th>Condition</th>
+                                    <th>Required</th>
+                                    <th>Actual</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Rating Diff</td>
+                                    <td>≤ ${modeConfig.maxRatingDiff}</td>
+                                    <td>${lobbyData.ratingDiff.toFixed(0)}</td>
+                                    <td>
+                                        <span class="badge ${lobbyData.ratingDiffValid ? 'badge-success' : 'badge-danger'}">
+                                            ${lobbyData.ratingDiffValid ? 'OK' : 'FAIL'}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Category Match</td>
+                                    <td>≥ ${(modeConfig.minCategoryMatch * 100).toFixed(0)}%</td>
+                                    <td>
+                                        <span class="percentage ${getMatchPercentClass(lobbyData.categoryMatch * 100)}">
+                                            ${(lobbyData.categoryMatch * 100).toFixed(0)}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge ${lobbyData.categoryMatchValid ? 'badge-success' : 'badge-danger'}">
+                                            ${lobbyData.categoryMatchValid ? 'OK' : 'FAIL'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Categories Analysis</h3>
+                        <div class="categories-analysis">
+                            <div class="categories-section">
+                                <h4>Common Categories (≥60% players)</h4>
+                                <div class="categories-list">
+                                    ${lobbyData.commonCats.length > 0 ?
+                        lobbyData.commonCats.join(', ') :
+                        '<span class="text-muted">None</span>'}
+                                </div>
+                            </div>
+                            <div class="categories-section">
+                                <h4>Unique Categories</h4>
+                                <div class="categories-list">
+                                    ${lobbyData.uniqueCats.length > 0 ?
+                        lobbyData.uniqueCats.join(', ') :
+                        '<span class="text-muted">None</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3>Players</h3>
+                        <table class="players-table">
+                            <thead>
+                                <tr>
+                                    <th>Player ID</th>
+                                    <th>Rating</th>
+                                    <th>Categories</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Array.from(row.querySelectorAll('.player-data')).map(player => `
+                                    <tr>
+                                        <td>${player.getAttribute('data-player-id')}</td>
+                                        <td>${player.getAttribute('data-rating')}</td>
+                                        <td>${JSON.parse(player.getAttribute('data-categories')).join(', ')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+
                     modal.style.display = 'block';
                 }
             });
         });
 
-        function showMatchDetails(element) {
-            const modal = element.nextElementSibling;
-            modal.style.display = "block";
-
-            window.onclick = function(event) {
-                if (event.target == modal) {
-                    modal.style.display = "none";
-                }
-            }
-        }
-
+        // Функция сортировки таблицы (исправленная)
         function sortLobbyTable(header, mode, sortKey) {
             const table = document.querySelector(`#${mode} table.lobby-table`);
             const tbody = table.querySelector('tbody');
             const rows = Array.from(tbody.querySelectorAll('tr'));
-            const direction = header.getAttribute('data-sort-direction') === 'asc' ? -1 : 1;
 
+            // Определяем направление сортировки
+            const currentDir = header.getAttribute('data-sort-dir') || 'none';
+            const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+            // Сбрасываем сортировку для всех заголовков
             table.querySelectorAll('th').forEach(th => {
-                th.removeAttribute('data-sort-direction');
+                th.removeAttribute('data-sort-dir');
                 th.classList.remove('sorted-asc', 'sorted-desc');
             });
 
-            header.setAttribute('data-sort-direction', direction === 1 ? 'asc' : 'desc');
-            header.classList.add(direction === 1 ? 'sorted-asc' : 'sorted-desc');
+            // Устанавливаем новое направление для текущего заголовка
+            header.setAttribute('data-sort-dir', newDir);
+            header.classList.add(newDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
 
+            // Сортируем строки
             rows.sort((a, b) => {
                 let aValue, bValue;
 
-                if (sortKey === 'avgRating' || sortKey === 'minRating' || sortKey === 'maxRating') {
-                    aValue = parseFloat(a.getAttribute(`data-${sortKey}`)) || 0;
-                    bValue = parseFloat(b.getAttribute(`data-${sortKey}`)) || 0;
-                    return (aValue - bValue) * direction;
-                } else {
-                    aValue = a.getAttribute(`data-${sortKey}`) || a.textContent.trim();
-                    bValue = b.getAttribute(`data-${sortKey}`) || b.textContent.trim();
-                    return aValue.toString().localeCompare(bValue.toString()) * direction;
+                switch(sortKey) {
+                    case 'id':
+                        aValue = a.getAttribute('data-id');
+                        bValue = b.getAttribute('data-id');
+                        return newDir === 'asc' ?
+                            aValue.localeCompare(bValue) :
+                            bValue.localeCompare(aValue);
+
+                    case 'match':
+                        aValue = parseFloat(a.getAttribute('data-category-match'));
+                        bValue = parseFloat(b.getAttribute('data-category-match'));
+                        break;
+
+                    case 'players':
+                        aValue = parseInt(a.getAttribute('data-players'));
+                        bValue = parseInt(b.getAttribute('data-players'));
+                        break;
+
+                    case 'avgRating':
+                    case 'minRating':
+                    case 'maxRating':
+                        aValue = parseFloat(a.getAttribute(`data-${sortKey}`));
+                        bValue = parseFloat(b.getAttribute(`data-${sortKey}`));
+                        break;
+
+                    case 'commonCats':
+                        aValue = JSON.parse(a.getAttribute('data-common-cats')).length;
+                        bValue = JSON.parse(b.getAttribute('data-common-cats')).length;
+                        break;
+
+                    case 'waitTime':
+                        aValue = timeStringToSeconds(a.getAttribute('data-wait-time'));
+                        bValue = timeStringToSeconds(b.getAttribute('data-wait-time'));
+                        break;
+
+                    case 'status':
+                        aValue = a.getAttribute('data-status');
+                        bValue = b.getAttribute('data-status');
+                        return newDir === 'asc' ?
+                            aValue.localeCompare(bValue) :
+                            bValue.localeCompare(aValue);
+
+                    default:
+                        return 0;
                 }
+
+                return newDir === 'asc' ? aValue - bValue : bValue - aValue;
             });
 
+            // Перестраиваем таблицу
             rows.forEach(row => tbody.appendChild(row));
         }
 
+        // Функция преобразования времени в секунды
         function timeStringToSeconds(timeStr) {
-            if (!timeStr || timeStr === '-') return 0;
-            if (timeStr === '<1s') return 0;
+            if (!timeStr || timeStr === '-' || timeStr === '<1s') return 0;
 
             const parts = timeStr.split(':').reverse();
             let seconds = 0;

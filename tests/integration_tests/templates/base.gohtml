@@ -235,7 +235,7 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.7);
+            background-color: rgba(0,0,0,0.5);
         }
 
         #lobbyModal {
@@ -248,15 +248,7 @@
             background: rgba(0,0,0,0.5);
             z-index: 1000;
         }
-        .modal-content {
-            background: white;
-            margin: 50px auto;
-            padding: 20px;
-            width: 80%;
-            max-width: 800px;
-            border-radius: 8px;
-            position: relative;
-        }
+
         .close-modal {
             position: absolute;
             top: 10px;
@@ -272,6 +264,18 @@
             font-weight: bold;
             cursor: pointer;
         }
+
+        .match-percent-0 { background-color: #ff0000; color: white; }
+        .match-percent-10 { background-color: #ff3300; color: white; }
+        .match-percent-20 { background-color: #ff6600; color: white; }
+        .match-percent-30 { background-color: #ff9900; color: white; }
+        .match-percent-40 { background-color: #ffcc00; color: black; }
+        .match-percent-50 { background-color: #ffff00; color: black; }
+        .match-percent-60 { background-color: #ccff00; color: black; }
+        .match-percent-70 { background-color: #99ff00; color: black; }
+        .match-percent-80 { background-color: #66ff00; color: black; }
+        .match-percent-90 { background-color: #33ff00; color: black; }
+        .match-percent-100 { background-color: #00ff00; color: black; }
 
         .close:hover {
             color: #777;
@@ -645,27 +649,6 @@
             font-size: 0.8em;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 20px;
-            border-radius: 8px;
-            width: 80%;
-            max-width: 900px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
 
         .close {
             color: #aaa;
@@ -713,11 +696,14 @@
 
         .modal-content {
             background-color: #fefefe;
-            margin: 10% auto;
+            margin: 5% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 50%;
+            width: 80%;
+            max-width: 900px;
             border-radius: 5px;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
         .player-rating {
@@ -758,8 +744,62 @@
         }
 
         .percentage {
-            font-size: 16px;
-            color: #6c757d;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+
+        .conditions-table th, .players-table th {
+            background-color: #f2f2f2;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .conditions-table td, .players-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        /* Секции */
+        .lobby-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .categories-analysis {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 15px 0;
+        }
+
+        .categories-section {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .categories-list {
+            margin-top: 5px;
+            padding: 5px;
+        }
+
+        .conditions-table, .players-table {
+            width: 100%;
+            margin: 15px 0;
+            border-collapse: collapse;
         }
 
         .progress-text {
@@ -849,6 +889,68 @@
             font-weight: bold;
             font-size: 0.8em;
             line-height: 20px;
+        }
+
+        .match-condition-chart {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .chart-container {
+            --chart-color: oklch(70% 0.3 calc(var(--match-percent) * 1.8));
+            width: 40px;
+            height: 40px;
+        }
+
+        .chart-progress {
+            transition: all 0.3s ease;
+        }
+
+        /* Иконки условий */
+        .condition-icons {
+            display: flex;
+            gap: 4px;
+        }
+
+        .condition-icon {
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .condition-icon.valid {
+            background-color: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+        }
+
+        .condition-icon.invalid {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+
+        /* Процент в модалке */
+        .percentage {
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .percentage.valid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .percentage.invalid {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Модальное окно */
+        .match-details-modal {
+            display: none;
+            position: fixed;
+            /* ... остальные стили модалки ... */
         }
 
         @media (max-width: 768px) {

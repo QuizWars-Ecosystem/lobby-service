@@ -1,16 +1,20 @@
 {{define "match_condition_chart"}}
+    {{$minMatch := (index $.Config.ServiceConfig.Matcher.Configs .Mode).MinCategoryMatch}}
+    {{$ratingDiffMax := (index $.Config.ServiceConfig.Matcher.Configs .Mode).MaxRatingDiff}}
+
     <div class="match-condition-chart"
-         data-valid="{{.OverallValid}}"
+         onclick="showMatchDetails(this)"
          data-rating-diff="{{.RatingDiffValue}}"
-         data-max-rating-diff="{{index $.Config.ServiceConfig.Matcher.Configs .Mode}}.MaxRatingDiff"
-         data-category-match="{{.CategoryMatchValue}}"
-         data-min-category-match="{{index $.Config.ServiceConfig.Matcher.Configs .Mode}}.MinCategoryMatch"
-         onclick="showMatchDetails(this)">
-        <div class="chart-container">
+         data-category-match="{{.CategoryMatchValue}}">
+
+        <!-- Круговой график с плавным цветом -->
+        <div class="chart-container"
+             style="--match-percent: {{mul .CategoryMatchValue 100}};
+                     --rating-diff-percent: {{div .RatingDiffValue $ratingDiffMax}};">
             <svg width="40" height="40" viewBox="0 0 40 40">
                 <circle class="chart-background" cx="20" cy="20" r="15" fill="none" stroke="#eee" stroke-width="10"></circle>
                 <circle class="chart-progress" cx="20" cy="20" r="15" fill="none"
-                        stroke="{{if .OverallValid}}#4CAF50{{else}}#F44336{{end}}"
+                        stroke="var(--chart-color)"
                         stroke-width="10"
                         stroke-dasharray="{{mul .CategoryMatchValue 100}} {{sub 100 (mul .CategoryMatchValue 100)}}"
                         transform="rotate(-90 20 20)"></circle>
@@ -19,8 +23,21 @@
                 </text>
             </svg>
         </div>
+
+        <!-- Иконки статусов -->
+        <div class="condition-icons">
+            <span class="condition-icon {{if .RatingDiffValid}}valid{{else}}invalid{{end}}"
+                  title="Rating diff: {{printf "%.0f" .RatingDiffValue}} (max {{$ratingDiffMax}})">
+                <i class="fas fa-chart-line"></i>
+            </span>
+            <span class="condition-icon {{if .CategoryMatchValid}}valid{{else}}invalid{{end}}"
+                  title="Category match: {{printf "%.0f" (mul .CategoryMatchValue 100)}}% (min {{mul $minMatch 100}}%)">
+                <i class="fas fa-tags"></i>
+            </span>
+        </div>
     </div>
 
+    <!-- Модальное окно с деталями -->
     <div class="match-details-modal">
         <div class="modal-content">
             <h3>Match Conditions Details</h3>
@@ -32,20 +49,28 @@
                     <th>Status</th>
                 </tr>
                 <tr>
-                    <td>Rating Diff</td>
-                    <td>{{printf "%.0f" (index $.Config.ServiceConfig.Matcher.Configs .Mode).MaxRatingDiff}}</td>
+                    <td>Rating Difference</td>
+                    <td>≤ {{printf "%.0f" $ratingDiffMax}}</td>
                     <td>{{printf "%.0f" .RatingDiffValue}}</td>
-                    <td><span class="badge {{if .RatingDiffValid}}badge-success{{else}}badge-danger{{end}}">
-                    {{if .RatingDiffValid}}OK{{else}}FAIL{{end}}
-                </span></td>
+                    <td>
+                        <span class="badge {{if .RatingDiffValid}}badge-success{{else}}badge-danger{{end}}">
+                            {{if .RatingDiffValid}}OK{{else}}FAIL{{end}}
+                        </span>
+                    </td>
                 </tr>
                 <tr>
                     <td>Category Match</td>
-                    <td>{{printf "%.0f" (mul (index $.Config.ServiceConfig.Matcher.Configs .Mode).MinCategoryMatch 100)}}%</td>
-                    <td>{{printf "%.0f" (mul .CategoryMatchValue 100)}}%</td>
-                    <td><span class="badge {{if .CategoryMatchValid}}badge-success{{else}}badge-danger{{end}}">
-                    {{if .CategoryMatchValid}}OK{{else}}FAIL{{end}}
-                </span></td>
+                    <td>≥ {{printf "%.0f" (mul $minMatch 100)}}%</td>
+                    <td>
+                        <span class="percentage {{if .CategoryMatchValid}}valid{{else}}invalid{{end}}">
+                            {{printf "%.0f" (mul .CategoryMatchValue 100)}}%
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {{if .CategoryMatchValid}}badge-success{{else}}badge-danger{{end}}">
+                            {{if .CategoryMatchValid}}OK{{else}}FAIL{{end}}
+                        </span>
+                    </td>
                 </tr>
             </table>
         </div>

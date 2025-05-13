@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/QuizWars-Ecosystem/lobby-service/tests/integration_tests/config"
 	"hash/crc32"
@@ -24,28 +25,26 @@ type TemplateData struct {
 }
 
 type LobbyStatView struct {
-	ID              string
-	Mode            string
-	PlayersCount    int
-	MaxPlayers      int
-	AvgRating       float64
-	MinRating       int32
-	MaxRating       int32
-	CommonCats      []int
-	UniqueCats      []int
-	WaitDuration    string
-	Status          string
-	StatusClass     string
-	RatingSet       map[string]int32
-	CategoriesSet   map[string][]int32
-	MatchConditions struct {
-		RatingDiffValid    bool
-		RatingDiffValue    float64
-		CategoryMatchValid bool
-		CategoryMatchValue float64
-		OverallValid       bool
-		OverallValue       float64
-	}
+	ID                 string
+	Mode               string
+	PlayersCount       int
+	MaxPlayers         int
+	AvgRating          float64
+	MinRating          int32
+	MaxRating          int32
+	CommonCats         []int
+	UniqueCats         []int
+	WaitDuration       string
+	Status             string
+	StatusClass        string
+	RatingSet          map[string]int32
+	CategoriesSet      map[string][]int32
+	RatingDiffValid    bool
+	RatingDiffValue    float64
+	CategoryMatchValid bool
+	CategoryMatchValue float64
+	OverallValid       bool
+	OverallValue       float64
 }
 
 func (r *Result) GenerateHTMLReport() error {
@@ -92,6 +91,7 @@ func (r *Result) GenerateHTMLReport() error {
 		"calculateAvgRating":    calculateAvgRating,
 		"calculateWaitDuration": calculateWaitDuration,
 		"getRatingClass":        getRatingClass,
+		"json":                  toJSON,
 		"div":                   func(a, b float64) float64 { return a / b * 100 },
 		"mul":                   func(a, b float64) float64 { return a * b },
 		"sub":                   func(a, b float64) float64 { return a - b },
@@ -203,12 +203,12 @@ func (r *Result) createLobbyStatView(id string, lobby *LobbyStat, threshold floa
 		CategoriesSet: lobby.categoriesSet,
 	}
 
-	view.MatchConditions.RatingDiffValid = ratingValid
-	view.MatchConditions.CategoryMatchValid = categoryValid
-	view.MatchConditions.RatingDiffValue = ratingDiff
-	view.MatchConditions.CategoryMatchValue = categoryMatch
-	view.MatchConditions.OverallValid = ratingValid && categoryValid
-	view.MatchConditions.OverallValue = overallScore
+	view.RatingDiffValid = ratingValid
+	view.CategoryMatchValid = categoryValid
+	view.RatingDiffValue = ratingDiff
+	view.CategoryMatchValue = categoryMatch
+	view.OverallValid = ratingValid && categoryValid
+	view.OverallValue = overallScore
 
 	return view
 }
@@ -245,6 +245,14 @@ func getHeatmapColor(value, min, max float64) string {
 
 func formatPercentage(value float64) string {
 	return fmt.Sprintf("%.1f%%", value)
+}
+
+func toJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func formatCategoryList(cats []int) string {

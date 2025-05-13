@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"net"
 	"strings"
 	"time"
@@ -39,38 +40,40 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 	logger := log.NewLogger(cfg.Local, cfg.Logger.Level)
 	cl.PushIO(logger)
 
+	zapLogger := logger.Zap().With(zap.String("Instance ID", uuid.NewString()[0:5]))
+
 	redisClient, err := clients.NewRedisClusterClient(
 		clients.NewRedisClusterOptions(cfg.Redis.URLs).
 			WithDialTimeout(20*time.Second).
-			WithMaxRetries(5).
-			WithPoolSize(1000).
+			WithMaxRetries(3).
+			WithPoolSize(500).
 			WithMinIdleConns(100).
-			WithPoolTimeout(time.Second*2).
-			WithReadTimeout(time.Second*2).
-			WithWriteTimeout(time.Second*2).
+			WithPoolTimeout(time.Second*3).
+			WithReadTimeout(time.Second).
+			WithWriteTimeout(time.Second).
 			WithRouterByLatency(true).
 			WithBackoffTimeouts(100*time.Millisecond, time.Second),
 	)
 	if err != nil {
-		logger.Zap().Error("error initializing redis client", zap.Error(err))
+		zapLogger.Error("error initializing redis client", zap.Error(err))
 		return nil, fmt.Errorf("error initializing redis client: %w", err)
 	}
 
 	cl.PushIO(redisClient)
 
-	ns, err := clients.NewNATSClient(clients.DefaultNATSOptions.WithURL(cfg.NATS.URL), logger.Zap())
+	ns, err := clients.NewNATSClient(clients.DefaultNATSOptions.WithURL(cfg.NATS.URL), zapLogger)
 	if err != nil {
-		logger.Zap().Error("error initializing nats client", zap.Error(err))
+		zapLogger.Error("error initializing nats client", zap.Error(err))
 		return nil, fmt.Errorf("error initializing nats client: %w", err)
 	}
 
 	cl.PushNE(ns.Close)
 
-	storage := store.NewStore(redisClient, logger.Zap())
-	streamManager := streamer.NewStreamManager(ns, storage, logger.Zap())
+	storage := store.NewStore(redisClient, zapLogger)
+	streamManager := streamer.NewStreamManager(ns, storage, zapLogger)
 	matcher := matchmaking.NewMatcher(cfg.Matcher)
-	waiter := lobby.NewWaiter(storage, streamManager, logger.Zap(), cfg.Lobby)
-	hand := handler.NewHandler(streamManager, waiter, matcher, storage, logger.Zap(), cfg.Handler)
+	waiter := lobby.NewWaiter(storage, streamManager, zapLogger, cfg.Lobby)
+	hand := handler.NewHandler(streamManager, waiter, matcher, storage, zapLogger, cfg.Handler)
 
 	grpcServer := grpc.NewServer()
 

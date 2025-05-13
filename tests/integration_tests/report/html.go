@@ -340,8 +340,11 @@ func (r *Result) checkMatchConditions(lobby *LobbyStat, mode string) (bool, bool
 
 	overallScore := ratingPercent*cfg.RatingWeight + categoryPercent*cfg.CategoryWeight
 
-	if overallScore <= 0.01 {
+	if ratingValid && categoryValid {
 		overallScore = 1.0
+	} else {
+		totalWeight := cfg.RatingWeight + cfg.CategoryWeight
+		overallScore = (ratingPercent*cfg.RatingWeight + categoryPercent*cfg.CategoryWeight) / totalWeight
 	}
 
 	return ratingValid, categoryValid, ratingDiff, categoryMatch, overallScore

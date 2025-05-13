@@ -52,7 +52,7 @@ func (m *Manager) Start(t *testing.T) error {
 
 		m.coons = append(m.coons, conn)
 		m.clients = append(m.clients, client)
-		time.Sleep(time.Millisecond * 250)
+		time.Sleep(time.Second)
 	}
 
 	return err

@@ -37,7 +37,7 @@ func NewTestConfig() *TestConfig {
 			PlayersCount:  10_000,
 			MaxRating:     10_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 20,
+			CategoryMaxID: 25,
 			Modes: []string{
 				"classic",
 				"battle",

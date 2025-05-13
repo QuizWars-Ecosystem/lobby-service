@@ -17,7 +17,7 @@
             </div>
             <div class="stat-card">
                 <h4>Players in Lobbies</h4>
-                <div class="value">{{.PlayersInLobbies}} {{(formatPercentage (div (toFloat64Int32 .PlayersInLobbies) (toFloat64 .Result.TotalPlayers)))}}</div>
+                <div class="value">{{.PlayersInLobbies}} ({{formatPercentage (div (toFloat64Int32 .PlayersInLobbies) (toFloat64 .Result.TotalPlayers))}})</div>
                 <div class="st-progress-container">
                     <div class="st-progress-bar" style="width: {{div (toFloat64Int32 .PlayersInLobbies) (toFloat64 .Result.TotalPlayers)}}%;"></div>
                 </div>
@@ -33,9 +33,19 @@
                 <div>{{formatPercentage (div (toFloat64 (len .Result.Expired)) (toFloat64 .LobbiesCount))}}</div>
             </div>
             <div class="stat-card">
+                <h4>Expired Players</h4>
+                <div class="value">{{len .Result.ExpiredPlayers}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.ExpiredPlayers)) (toFloat64 .TotalPlayers))}}</div>
+            </div>
+            <div class="stat-card">
                 <h4>Errored Lobbies</h4>
                 <div class="value">{{len .Result.Errored}}</div>
                 <div>{{formatPercentage (div (toFloat64 (len .Result.Errored)) (toFloat64 .LobbiesCount))}}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Errored Players</h4>
+                <div class="value">{{len .Result.ErroredPlayers}}</div>
+                <div>{{formatPercentage (div (toFloat64 (len .Result.ErroredPlayers)) (toFloat64 .TotalPlayers))}}</div>
             </div>
             <div class="stat-card">
                 <h4>Requesting Duration</h4>

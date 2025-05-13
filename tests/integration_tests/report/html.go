@@ -24,20 +24,28 @@ type TemplateData struct {
 }
 
 type LobbyStatView struct {
-	ID            string
-	Mode          string
-	PlayersCount  int
-	MaxPlayers    int
-	AvgRating     float64
-	MinRating     int32
-	MaxRating     int32
-	CommonCats    []int
-	UniqueCats    []int
-	WaitDuration  string
-	Status        string
-	StatusClass   string
-	RatingSet     map[string]int32
-	CategoriesSet map[string][]int32
+	ID              string
+	Mode            string
+	PlayersCount    int
+	MaxPlayers      int
+	AvgRating       float64
+	MinRating       int32
+	MaxRating       int32
+	CommonCats      []int
+	UniqueCats      []int
+	WaitDuration    string
+	Status          string
+	StatusClass     string
+	RatingSet       map[string]int32
+	CategoriesSet   map[string][]int32
+	MatchConditions struct {
+		RatingDiffValid    bool
+		RatingDiffValue    float64
+		CategoryMatchValid bool
+		CategoryMatchValue float64
+		OverallValid       bool
+		OverallValue       float64
+	}
 }
 
 func (r *Result) GenerateHTMLReport() error {
@@ -86,6 +94,7 @@ func (r *Result) GenerateHTMLReport() error {
 		"getRatingClass":        getRatingClass,
 		"div":                   func(a, b float64) float64 { return a / b * 100 },
 		"mul":                   func(a, b float64) float64 { return a * b },
+		"sub":                   func(a, b float64) float64 { return a - b },
 		"toFloat64":             func(x int) float64 { return float64(x) },
 		"toFloat64Int32":        func(x int32) float64 { return float64(x) },
 		"randomColor": func(seed string) string {
@@ -99,6 +108,20 @@ func (r *Result) GenerateHTMLReport() error {
 		},
 		"durationSeconds": func(start, end time.Time) float64 {
 			return end.Sub(start).Seconds()
+		},
+		"dict": func(values ...interface{}) (map[string]interface{}, error) {
+			if len(values)%2 != 0 {
+				return nil, fmt.Errorf("invalid dict call")
+			}
+			dict := make(map[string]interface{}, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict keys must be strings")
+				}
+				dict[key] = values[i+1]
+			}
+			return dict, nil
 		},
 	})
 
@@ -161,7 +184,9 @@ func (r *Result) createLobbyStatView(id string, lobby *LobbyStat, threshold floa
 
 	status, statusClass := getLobbyStatus(lobby)
 
-	return LobbyStatView{
+	ratingValid, categoryValid, ratingDiff, categoryMatch, overallScore := r.checkMatchConditions(lobby, lobby.Mode)
+
+	view := LobbyStatView{
 		ID:            id,
 		Mode:          lobby.Mode,
 		PlayersCount:  int(lobby.Players),
@@ -177,6 +202,15 @@ func (r *Result) createLobbyStatView(id string, lobby *LobbyStat, threshold floa
 		RatingSet:     lobby.RatingSet,
 		CategoriesSet: lobby.categoriesSet,
 	}
+
+	view.MatchConditions.RatingDiffValid = ratingValid
+	view.MatchConditions.CategoryMatchValid = categoryValid
+	view.MatchConditions.RatingDiffValue = ratingDiff
+	view.MatchConditions.CategoryMatchValue = categoryMatch
+	view.MatchConditions.OverallValid = ratingValid && categoryValid
+	view.MatchConditions.OverallValue = overallScore
+
+	return view
 }
 
 func getLobbyStatus(lobby *LobbyStat) (string, string) {
@@ -267,4 +301,113 @@ func getRatingClass(rating int32) string {
 	default:
 		return "rating-low"
 	}
+}
+
+func (r *Result) checkMatchConditions(lobby *LobbyStat, mode string) (bool, bool, float64, float64, float64) {
+	cfg := r.Cfg.ServiceConfig.Matcher.Configs[mode]
+	if cfg.MaxRatingDiff == 0 {
+		cfg = r.Cfg.ServiceConfig.Matcher.Configs["default"]
+	}
+
+	ratingDiff := float64(getRatingSpread(lobby.RatingSet))
+	ratingValid := ratingDiff <= cfg.MaxRatingDiff
+
+	categoryMatch := calculateCategoryMatch(lobby.categoriesSet)
+	categoryValid := categoryMatch >= cfg.MinCategoryMatch
+
+	overallScore := 0.0
+	if cfg.MaxRatingDiff > 0 {
+		ratingScore := 1.0 - math.Min(1.0, ratingDiff/cfg.MaxRatingDiff)
+		overallScore += ratingScore * 0.5
+	}
+	overallScore += math.Min(1.0, categoryMatch/cfg.MinCategoryMatch) * 0.5
+
+	return ratingValid, categoryValid, ratingDiff, categoryMatch, overallScore
+}
+
+func getRatingSpread(ratings map[string]int32) int32 {
+	if len(ratings) == 0 {
+		return 0
+	}
+
+	minR, maxR := int32(math.MaxInt32), int32(math.MinInt32)
+	for _, r := range ratings {
+		if r < minR {
+			minR = r
+		}
+		if r > maxR {
+			maxR = r
+		}
+	}
+
+	return maxR - minR
+}
+
+func calculateCategoryMatch(categories map[string][]int32) float64 {
+	if len(categories) < 2 {
+		return 1.0
+	}
+
+	var totalMatch float64
+	var pairs int
+
+	players := make([][]int32, 0, len(categories))
+	for _, cats := range categories {
+		players = append(players, cats)
+	}
+
+	for i := 0; i < len(players); i++ {
+		for j := i + 1; j < len(players); j++ {
+			intersection := intersect(players[i], players[j])
+			union := union(players[i], players[j])
+			if len(union) == 0 {
+				continue
+			}
+			totalMatch += float64(len(intersection)) / float64(len(union))
+			pairs++
+		}
+	}
+
+	if pairs == 0 {
+		return 0
+	}
+	return totalMatch / float64(pairs)
+}
+
+func intersect(a, b []int32) []int32 {
+	set := make(map[int32]struct{})
+	var result []int32
+
+	for _, item := range a {
+		set[item] = struct{}{}
+	}
+
+	for _, item := range b {
+		if _, exists := set[item]; exists {
+			result = append(result, item)
+			delete(set, item)
+		}
+	}
+
+	return result
+}
+
+func union(a, b []int32) []int32 {
+	set := make(map[int32]struct{})
+	var result []int32
+
+	for _, item := range a {
+		if _, exists := set[item]; !exists {
+			set[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+	for _, item := range b {
+		if _, exists := set[item]; !exists {
+			set[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+
+	return result
 }

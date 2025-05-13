@@ -32,6 +32,8 @@
                 <div class="header">Rating Weight</div>
                 <div class="header">Category Weight</div>
                 <div class="header">Fill Weight</div>
+                <div class="header">Max Rating Difference</div>
+                <div class="header">Min Categories Match</div>
 
                 {{range $mode, $mc := .Config.ServiceConfig.Matcher.Configs}}
                     <!-- Row -->
@@ -44,6 +46,12 @@
                     </div>
                     <div class="value-cell" style="background-color: {{heatmapColor $mc.FillWeight 0 1}}">
                         {{printf "%.2f" $mc.FillWeight}}
+                    </div>
+                    <div class="value-cell" style="background-color: {{heatmapColor $mc.MaxRatingDiff 0 1}}">
+                        {{printf "%.1f" $mc.MaxRatingDiff}}
+                    </div>
+                    <div class="value-cell" style="background-color: {{heatmapColor $mc.MinCategoryMatch 0 1}}">
+                        {{printf "%.2f" mul $mc.MinCategoryMatch 100}}
                     </div>
                 {{end}}
             </div>

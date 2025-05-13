@@ -1,7 +1,6 @@
 {{define "lobby_details"}}
     <div class="card">
         <h2>Lobby Details</h2>
-        <input type="text" id="lobbySearch" class="search-box" placeholder="Search lobbies..." onkeyup="searchLobbies()">
         <div class="tab-container">
             <div class="tab-buttons" id="modeTabs">
                 {{range $index, $mode := .Modes}}
@@ -36,6 +35,26 @@
                                 data-wait-time="{{$lobby.WaitDuration}}"
                                 data-status="{{$lobby.Status}}">
                                 <td>{{$lobby.ID}}</td>
+                                <td>
+                                    <span class="badge {{if $lobby.MatchConditions.RatingDiffValid}}badge-success{{else}}badge-danger{{end}}"
+                                          title="Rating diff: {{printf "%.0f" $lobby.MatchConditions.RatingDiffValue}} (max {{index $.Config.ServiceConfig.Matcher.Configs $lobby.Mode}}.MaxRatingDiff)">
+                                        <i class="fas fa-chart-line"></i>
+                                    </span>
+                                                                    <span class="badge {{if $lobby.MatchConditions.CategoryMatchValid}}badge-success{{else if lt $lobby.MatchConditions.CategoryMatchValue 0.2}}badge-danger{{else if lt $lobby.MatchConditions.CategoryMatchValue 0.4}}badge-warning{{else}}badge-info{{end}}"
+                                                                          title="Category match: {{printf "%.0f" (mul $lobby.MatchConditions.CategoryMatchValue 100)}}% (min {{mul (index $.Config.ServiceConfig.Matcher.Configs $lobby.Mode).MinCategoryMatch 100}}%)">
+                                        <i class="fas fa-tags"></i>
+                                    </span>
+                                </td>
+                                <td>
+                                    {{template "match_condition_chart" (dict
+                                    "OverallValid" $lobby.MatchConditions.OverallValid
+                                    "RatingDiffValue" $lobby.MatchConditions.RatingDiffValue
+                                    "CategoryMatchValue" $lobby.MatchConditions.CategoryMatchValue
+                                    "Mode" $lobby.Mode
+                                    "Config" $.Config
+                                    )}}
+                                </td>
+                                <th onclick="sortLobbyTable(this, '{{$mode}}', 'match')">Match %</th>
                                 <td>{{$lobby.PlayersCount}}/{{$lobby.MaxPlayers}}</td>
                                 <td>{{printf "%.0f" $lobby.AvgRating}}</td>
                                 <td>{{$lobby.MinRating}}</td>
@@ -109,6 +128,17 @@
                 }
             });
         });
+
+        function showMatchDetails(element) {
+            const modal = element.nextElementSibling;
+            modal.style.display = "block";
+
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+            }
+        }
 
         function sortLobbyTable(header, mode, sortKey) {
             const table = document.querySelector(`#${mode} table.lobby-table`);

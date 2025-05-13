@@ -17,8 +17,8 @@ type LobbyStatCreator struct {
 	Mode          string
 	Players       int
 	MaxPlayers    int
-	RatingSet     map[string]int32
-	CategoriesSet map[string][]int32
+	RatingSet     map[string]int32   // player id -> rating
+	CategoriesSet map[string][]int32 // player id -> categories
 	CreatedAt     time.Time
 	StartedAt     time.Time
 	Status        string

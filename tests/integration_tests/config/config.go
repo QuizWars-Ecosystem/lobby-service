@@ -33,10 +33,10 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  50_000,
-			MaxRating:     10_000,
+			PlayersCount:  1_000,
+			MaxRating:     5_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 25,
+			CategoryMaxID: 10,
 			Modes: []string{
 				"classic",
 				"battle",

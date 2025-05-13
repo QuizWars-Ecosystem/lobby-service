@@ -1,25 +1,40 @@
 {{define "match_condition_chart"}}
     {{$minMatch := (index $.Config.ServiceConfig.Matcher.Configs .Mode).MinCategoryMatch}}
     {{$ratingDiffMax := (index $.Config.ServiceConfig.Matcher.Configs .Mode).MaxRatingDiff}}
+    {{$ratingWeight := (index $.Config.ServiceConfig.Matcher.Configs .Mode).RatingWeight}}
+    {{$categoryWeight := (index $.Config.ServiceConfig.Matcher.Configs .Mode).CategoryWeight}}
+
+    <!-- Рассчитываем общий процент соответствия -->
+    {{$ratingPercent := 0.0}}
+    {{if gt $ratingDiffMax 0}}
+        {{$ratingPercent = sub 1.0 (div .RatingDiffValue $ratingDiffMax)}}
+        {{if lt $ratingPercent 0.0}}{{$ratingPercent = 0.0}}{{end}}
+    {{end}}
+
+    {{$categoryPercent := div .CategoryMatchValue $minMatch}}
+    {{if gt $categoryPercent 1.0}}{{$categoryPercent = 1.0}}{{end}}
+
+    {{$totalPercent := add (mul $ratingPercent $ratingWeight) (mul $categoryPercent $categoryWeight)}}
+    {{$totalPercent = mul $totalPercent 100}}
 
     <div class="match-condition-chart"
          onclick="showMatchDetails(this)"
          data-rating-diff="{{.RatingDiffValue}}"
          data-category-match="{{.CategoryMatchValue}}">
 
-        <!-- Круговой график с плавным цветом -->
+        <!-- Круговой график с общим процентом соответствия -->
         <div class="chart-container"
-             style="--match-percent: {{mul .CategoryMatchValue 100}};
+             style="--match-percent: {{$totalPercent}};
                      --rating-diff-percent: {{div .RatingDiffValue $ratingDiffMax}};">
             <svg width="40" height="40" viewBox="0 0 40 40">
                 <circle class="chart-background" cx="20" cy="20" r="15" fill="none" stroke="#eee" stroke-width="10"></circle>
                 <circle class="chart-progress" cx="20" cy="20" r="15" fill="none"
                         stroke="var(--chart-color)"
                         stroke-width="10"
-                        stroke-dasharray="{{mul .CategoryMatchValue 100}} {{sub 100 (mul .CategoryMatchValue 100)}}"
+                        stroke-dasharray="{{$totalPercent}} {{sub 100 $totalPercent}}"
                         transform="rotate(-90 20 20)"></circle>
                 <text x="20" y="23" text-anchor="middle" font-size="10" fill="#333">
-                    {{printf "%.0f" (mul .CategoryMatchValue 100)}}%
+                    {{printf "%.0f" $totalPercent}}%
                 </text>
             </svg>
         </div>
@@ -46,12 +61,14 @@
                     <th>Condition</th>
                     <th>Required</th>
                     <th>Actual</th>
+                    <th>Match %</th>
                     <th>Status</th>
                 </tr>
                 <tr>
                     <td>Rating Difference</td>
                     <td>≤ {{printf "%.0f" $ratingDiffMax}}</td>
                     <td>{{printf "%.0f" .RatingDiffValue}}</td>
+                    <td>{{printf "%.0f" (mul $ratingPercent 100)}}%</td>
                     <td>
                         <span class="badge {{if .RatingDiffValid}}badge-success{{else}}badge-danger{{end}}">
                             {{if .RatingDiffValid}}OK{{else}}FAIL{{end}}
@@ -61,14 +78,20 @@
                 <tr>
                     <td>Category Match</td>
                     <td>≥ {{printf "%.0f" (mul $minMatch 100)}}%</td>
-                    <td>
-                        <span class="percentage {{if .CategoryMatchValid}}valid{{else}}invalid{{end}}">
-                            {{printf "%.0f" (mul .CategoryMatchValue 100)}}%
-                        </span>
-                    </td>
+                    <td>{{printf "%.0f" (mul .CategoryMatchValue 100)}}%</td>
+                    <td>{{printf "%.0f" (mul $categoryPercent 100)}}%</td>
                     <td>
                         <span class="badge {{if .CategoryMatchValid}}badge-success{{else}}badge-danger{{end}}">
                             {{if .CategoryMatchValid}}OK{{else}}FAIL{{end}}
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3"><strong>Total Match</strong></td>
+                    <td><strong>{{printf "%.0f" $totalPercent}}%</strong></td>
+                    <td>
+                        <span class="badge {{if and .RatingDiffValid .CategoryMatchValid}}badge-success{{else}}badge-danger{{end}}">
+                            {{if and .RatingDiffValid .CategoryMatchValid}}OK{{else}}FAIL{{end}}
                         </span>
                     </td>
                 </tr>

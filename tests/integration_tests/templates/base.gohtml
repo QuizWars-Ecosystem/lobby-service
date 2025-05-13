@@ -438,6 +438,20 @@
             color: #0c5460;
         }
 
+        .lobby-table {
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        .lobby-table th,
+        .lobby-table td {
+            padding: 8px;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .rating-high { color: #dc3545; }
         .rating-medium-high { color: #fd7e14; }
         .rating-medium { color: #ffc107; }
@@ -858,6 +872,23 @@
             z-index: 2;
         }
 
+        .match-percent-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: conic-gradient(
+                    var(--color) calc(var(--percent) * 1%),
+                    #eee calc(var(--percent) * 1%)
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 10px;
+            font-weight: bold;
+            margin: 0 auto;
+        }
+
         /* Градиент для прогресс-бара */
         .players-stat .progress-bar::after {
             content: '';
@@ -944,13 +975,6 @@
         .percentage.invalid {
             background-color: #f8d7da;
             color: #721c24;
-        }
-
-        /* Модальное окно */
-        .match-details-modal {
-            display: none;
-            position: fixed;
-            /* ... остальные стили модалки ... */
         }
 
         @media (max-width: 768px) {

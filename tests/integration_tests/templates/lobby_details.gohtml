@@ -11,6 +11,18 @@
             {{range $index, $mode := .Modes}}
                 <div id="{{$mode}}" class="tab-content{{if eq $index 0}} active{{end}}">
                     <table class="lobby-table" data-mode="{{$mode}}">
+                        <colgroup>
+                            <col style="width: 120px"> <!-- Lobby ID -->
+                            <col style="width: 80px"> <!-- Match % -->
+                            <col style="width: 80px"> <!-- Players -->
+                            <col style="width: 80px"> <!-- Avg Rating -->
+                            <col style="width: 80px"> <!-- Min Rating -->
+                            <col style="width: 80px"> <!-- Max Rating -->
+                            <col style="width: 150px"> <!-- Common Categories -->
+                            <col style="width: 100px"> <!-- Wait Time -->
+                            <col style="width: 100px"> <!-- Status -->
+                            <col style="width: 120px"> <!-- Actions -->
+                        </colgroup>
                         <thead>
                         <tr>
                             <th onclick="sortLobbyTable(this, '{{$mode}}', 'id')">Lobby ID</th>
@@ -40,16 +52,16 @@
                                 data-rating-diff-valid="{{$lobby.RatingDiffValid}}"
                                 data-category-match-valid="{{$lobby.CategoryMatchValid}}"
                                 data-common-cats="{{json $lobby.CommonCats}}"
-                                data-unique-cats="{{json $lobby.UniqueCats}}">
+                                data-unique-cats="{{json $lobby.UniqueCats}}"
+                                data-rating-set="{{json $lobby.RatingSet}}"
+                                data-categories-set="{{json $lobby.CategoriesSet}}">
                                 <td>{{$lobby.ID}}</td>
                                 <td>
-                                    {{template "match_condition_chart" (dict
-                                    "OverallValid" $lobby.OverallValid
-                                    "RatingDiffValue" $lobby.RatingDiffValue
-                                    "CategoryMatchValue" $lobby.CategoryMatchValue
-                                    "Mode" $lobby.Mode
-                                    "Config" $.Config
-                                    )}}
+                                    <div class="match-percent-circle"
+                                         style="--percent: {{mul $lobby.CategoryMatchValue 100}};
+                                                 --color: {{if $lobby.CategoryMatchValid}}#4CAF50{{else}}#F44336{{end}}">
+                                        {{printf "%.0f" (mul $lobby.CategoryMatchValue 100)}}%
+                                    </div>
                                 </td>
                                 <td>{{$lobby.PlayersCount}}/{{$lobby.MaxPlayers}}</td>
                                 <td>{{printf "%.0f" $lobby.AvgRating}}</td>
@@ -78,193 +90,309 @@
         </div>
     </div>
 
+    <style>
+        /* Стили для кнопки View Details */
+        .view-lobby-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .view-lobby-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* Круг с процентом */
+        .match-percent-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: conic-gradient(
+                    var(--color) calc(var(--percent) * 1%),
+                    #eee calc(var(--percent) * 1%)
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 10px;
+            font-weight: bold;
+            margin: 0 auto;
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #4361ee;
+            width: 80%;
+            max-width: 900px;
+            border-radius: 5px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .lobby-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .conditions-table, .players-table {
+            width: 100%;
+            margin: 15px 0;
+            border-collapse: collapse;
+        }
+
+        .conditions-table th, .players-table th {
+            background-color: var(--primary);
+            padding: 8px;
+            text-align: left;
+        }
+
+        .conditions-table td, .players-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .categories-analysis {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 15px 0;
+        }
+
+        .categories-section {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .categories-list {
+            margin-top: 5px;
+            padding: 5px;
+        }
+
+        .text-muted {
+            color: #999;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .percentage {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+    </style>
+
     <script>
-        // Функция для определения класса процента соответствия
         function getMatchPercentClass(percent) {
             const rounded = Math.min(100, Math.max(0, Math.floor(percent / 10) * 10));
             return `match-percent-${rounded}`;
         }
 
-        // Обработчик клика по кнопке View Details
-        document.addEventListener('DOMContentLoaded', function() {
-            // Обработчик закрытия модального окна
-            document.querySelector('.modal .close').addEventListener('click', function() {
-                document.getElementById('lobbyModal').style.display = 'none';
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('lobbyModal');
+            const content = document.getElementById('modalContent');
+
+            document.querySelector('.modal .close').addEventListener('click', function () {
+                modal.style.display = 'none';
             });
 
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('view-lobby-btn')) {
-                    const row = e.target.closest('tr');
-                    const modal = document.getElementById('lobbyModal');
-                    const content = document.getElementById('modalContent');
+            document.addEventListener('click', function (e) {
+                if (!e.target.classList.contains('view-lobby-btn')) return;
 
-                    // Получаем все данные из data-атрибутов
-                    const lobbyData = {
-                        id: row.getAttribute('data-id'),
-                        mode: row.closest('.tab-content').id,
-                        playersCount: row.getAttribute('data-players'),
-                        maxPlayers: row.getAttribute('data-max-players'),
-                        avgRating: row.getAttribute('data-avg-rating'),
-                        minRating: row.getAttribute('data-min-rating'),
-                        maxRating: row.getAttribute('data-max-rating'),
-                        waitTime: row.getAttribute('data-wait-time'),
-                        status: row.getAttribute('data-status'),
-                        statusClass: row.querySelector('.badge').className,
-                        ratingDiff: parseFloat(row.getAttribute('data-rating-diff')),
-                        categoryMatch: parseFloat(row.getAttribute('data-category-match')),
-                        ratingDiffValid: row.getAttribute('data-rating-diff-valid') === 'true',
-                        categoryMatchValid: row.getAttribute('data-category-match-valid') === 'true',
-                        commonCats: JSON.parse(row.getAttribute('data-common-cats')),
-                        uniqueCats: JSON.parse(row.getAttribute('data-unique-cats'))
-                    };
+                const row = e.target.closest('tr');
+                if (!row) return;
 
-                    // Получаем конфиг для этого режима
-                    const modeConfig = {
-                        {{range $mode, $cfg := .Config.ServiceConfig.Matcher.Configs}}
-                        '{{$mode}}': {
-                            maxRatingDiff: {{$cfg.MaxRatingDiff}},
-                            minCategoryMatch: {{$cfg.MinCategoryMatch}},
-                            ratingWeight: {{$cfg.RatingWeight}},
-                            categoryWeight: {{$cfg.CategoryWeight}},
-                            fillWeight: {{$cfg.FillWeight}}
-                        },
-                        {{end}}
-                    }[lobbyData.mode] || {
-                        maxRatingDiff: 1000,
-                        minCategoryMatch: 0.3,
-                        ratingWeight: 0.3,
-                        categoryWeight: 0.5,
-                        fillWeight: 0.2
-                    };
+                const badge = row.querySelector('.badge');
+                const statusClass = badge ? badge.className : '';
 
-                    // Формируем HTML для модального окна
-                    content.innerHTML = `
-                        <h2>Lobby Details: ${lobbyData.id}</h2>
+                const lobbyData = {
+                    id: row.getAttribute('data-id'),
+                    mode: row.closest('.tab-content')?.id || 'default',
+                    playersCount: row.getAttribute('data-players'),
+                    maxPlayers: row.getAttribute('data-max-players'),
+                    avgRating: row.getAttribute('data-avg-rating'),
+                    minRating: row.getAttribute('data-min-rating'),
+                    maxRating: row.getAttribute('data-max-rating'),
+                    waitTime: row.getAttribute('data-wait-time'),
+                    status: row.getAttribute('data-status'),
+                    statusClass: statusClass,
+                    ratingDiff: parseFloat(row.getAttribute('data-rating-diff')),
+                    categoryMatch: parseFloat(row.getAttribute('data-category-match')),
+                    ratingDiffValid: row.getAttribute('data-rating-diff-valid') === 'true',
+                    categoryMatchValid: row.getAttribute('data-category-match-valid') === 'true',
+                    commonCats: JSON.parse(row.getAttribute('data-common-cats') || '[]'),
+                    uniqueCats: JSON.parse(row.getAttribute('data-unique-cats') || '[]'),
+                    ratingSet: JSON.parse(row.getAttribute('data-rating-set') || '{}'),
+                    categoriesSet: JSON.parse(row.getAttribute('data-categories-set') || '{}')
+                };
 
-                        <div class="lobby-summary">
-                            <div class="summary-item">
-                                <span class="label">Mode:</span>
-                                <span class="value">${lobbyData.mode}</span>
-                            </div>
-                            <div class="summary-item">
-                                <span class="label">Players:</span>
-                                <span class="value">${lobbyData.playersCount}/${lobbyData.maxPlayers}</span>
-                            </div>
-                            <div class="summary-item">
-                                <span class="label">Status:</span>
-                                <span class="value badge ${lobbyData.statusClass}">${lobbyData.status}</span>
-                            </div>
-                            <div class="summary-item">
-                                <span class="label">Wait Time:</span>
-                                <span class="value">${lobbyData.waitTime}</span>
-                            </div>
-                        </div>
+                lobbyData.commonCats = Array.isArray(lobbyData.commonCats) ? lobbyData.commonCats : [];
+                lobbyData.uniqueCats = Array.isArray(lobbyData.uniqueCats) ? lobbyData.uniqueCats : [];
 
-                        <h3>Match Conditions</h3>
-                        <table class="conditions-table">
-                            <thead>
-                                <tr>
-                                    <th>Condition</th>
-                                    <th>Required</th>
-                                    <th>Actual</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Rating Diff</td>
-                                    <td>≤ ${modeConfig.maxRatingDiff}</td>
-                                    <td>${lobbyData.ratingDiff.toFixed(0)}</td>
-                                    <td>
-                                        <span class="badge ${lobbyData.ratingDiffValid ? 'badge-success' : 'badge-danger'}">
-                                            ${lobbyData.ratingDiffValid ? 'OK' : 'FAIL'}
-                                        </span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Category Match</td>
-                                    <td>≥ ${(modeConfig.minCategoryMatch * 100).toFixed(0)}%</td>
-                                    <td>
-                                        <span class="percentage ${getMatchPercentClass(lobbyData.categoryMatch * 100)}">
-                                            ${(lobbyData.categoryMatch * 100).toFixed(0)}%
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge ${lobbyData.categoryMatchValid ? 'badge-success' : 'badge-danger'}">
-                                            ${lobbyData.categoryMatchValid ? 'OK' : 'FAIL'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                const modeConfig = {
+                    {{range $mode, $cfg := .Config.ServiceConfig.Matcher.Configs}}
+                    '{{$mode}}': {
+                        maxRatingDiff: {{$cfg.MaxRatingDiff}},
+                        minCategoryMatch: {{$cfg.MinCategoryMatch}}
+                    },
+                    {{end}}
+                }[lobbyData.mode] || {
+                    maxRatingDiff: 1000,
+                    minCategoryMatch: 0.3
+                };
 
-                        <h3>Categories Analysis</h3>
-                        <div class="categories-analysis">
-                            <div class="categories-section">
-                                <h4>Common Categories (≥60% players)</h4>
-                                <div class="categories-list">
-                                    ${lobbyData.commonCats.length > 0 ?
-                        lobbyData.commonCats.join(', ') :
-                        '<span class="text-muted">None</span>'}
-                                </div>
-                            </div>
-                            <div class="categories-section">
-                                <h4>Unique Categories</h4>
-                                <div class="categories-list">
-                                    ${lobbyData.uniqueCats.length > 0 ?
-                        lobbyData.uniqueCats.join(', ') :
-                        '<span class="text-muted">None</span>'}
-                                </div>
-                            </div>
-                        </div>
+                const players = Object.entries(lobbyData.ratingSet).map(([id, rating]) => ({
+                    id,
+                    rating,
+                    categories: lobbyData.categoriesSet[id] || []
+                }));
 
-                        <h3>Players</h3>
-                        <table class="players-table">
-                            <thead>
-                                <tr>
-                                    <th>Player ID</th>
-                                    <th>Rating</th>
-                                    <th>Categories</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${Array.from(row.querySelectorAll('.player-data')).map(player => `
-                                    <tr>
-                                        <td>${player.getAttribute('data-player-id')}</td>
-                                        <td>${player.getAttribute('data-rating')}</td>
-                                        <td>${JSON.parse(player.getAttribute('data-categories')).join(', ')}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    `;
-
-                    modal.style.display = 'block';
+                function getMatchPercentClass(percent) {
+                    if (percent >= 90) return 'text-success';
+                    if (percent >= 60) return 'text-warning';
+                    return 'text-danger';
                 }
+
+                content.innerHTML = `
+            <h2>Lobby Details: ${lobbyData.id}</h2>
+
+            <div class="lobby-summary">
+                <div class="summary-item"><span class="label">Mode:</span><span class="value">${lobbyData.mode}</span></div>
+                <div class="summary-item"><span class="label">Players:</span><span class="value">${lobbyData.playersCount}/${lobbyData.maxPlayers}</span></div>
+                <div class="summary-item"><span class="label">Status:</span><span class="value badge ${lobbyData.statusClass}">${lobbyData.status}</span></div>
+                <div class="summary-item"><span class="label">Wait Time:</span><span class="value">${lobbyData.waitTime}</span></div>
+            </div>
+
+            <h3>Match Conditions</h3>
+            <table class="conditions-table">
+                <thead>
+                    <tr><th>Condition</th><th>Required</th><th>Actual</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Rating Difference</td>
+                        <td>≤ ${modeConfig.maxRatingDiff}</td>
+                        <td>${lobbyData.ratingDiff.toFixed(0)}</td>
+                        <td><span class="badge ${lobbyData.ratingDiffValid ? 'badge-success' : 'badge-danger'}">${lobbyData.ratingDiffValid ? 'OK' : 'FAIL'}</span></td>
+                    </tr>
+                    <tr>
+                        <td>Category Match</td>
+                        <td>≥ ${(modeConfig.minCategoryMatch * 100).toFixed(0)}%</td>
+                        <td><span class="percentage ${getMatchPercentClass(lobbyData.categoryMatch * 100)}">${(lobbyData.categoryMatch * 100).toFixed(0)}%</span></td>
+                        <td><span class="badge ${lobbyData.categoryMatchValid ? 'badge-success' : 'badge-danger'}">${lobbyData.categoryMatchValid ? 'OK' : 'FAIL'}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Categories Analysis</h3>
+            <div class="categories-analysis">
+                <div class="categories-section">
+                    <h4>Common Categories (≥ ${(modeConfig.minCategoryMatch * 100).toFixed(0)}% players)</h4>
+                    <div class="categories-list">
+                        ${lobbyData.commonCats.length > 0 ? lobbyData.commonCats.join(', ') : '<span class="text-muted">None</span>'}
+                    </div>
+                </div>
+                <div class="categories-section">
+                    <h4>Unique Categories</h4>
+                    <div class="categories-list">
+                        ${lobbyData.uniqueCats.length > 0 ? lobbyData.uniqueCats.join(', ') : '<span class="text-muted">None</span>'}
+                    </div>
+                </div>
+            </div>
+
+            <h3>Players (${players.length})</h3>
+            <table class="players-table">
+                <thead>
+                    <tr><th>Player ID</th><th>Rating</th><th>Categories</th></tr>
+                </thead>
+                <tbody>
+                    ${players.map(p => `
+                        <tr>
+                            <td>${p.id}</td>
+                            <td>${p.rating}</td>
+                            <td>${p.categories.join(', ')}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+                modal.style.display = 'block';
             });
         });
 
-        // Функция сортировки таблицы (исправленная)
         function sortLobbyTable(header, mode, sortKey) {
             const table = document.querySelector(`#${mode} table.lobby-table`);
             const tbody = table.querySelector('tbody');
             const rows = Array.from(tbody.querySelectorAll('tr'));
 
-            // Определяем направление сортировки
             const currentDir = header.getAttribute('data-sort-dir') || 'none';
             const newDir = currentDir === 'asc' ? 'desc' : 'asc';
 
-            // Сбрасываем сортировку для всех заголовков
             table.querySelectorAll('th').forEach(th => {
                 th.removeAttribute('data-sort-dir');
                 th.classList.remove('sorted-asc', 'sorted-desc');
             });
 
-            // Устанавливаем новое направление для текущего заголовка
+
             header.setAttribute('data-sort-dir', newDir);
             header.classList.add(newDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
 
-            // Сортируем строки
             rows.sort((a, b) => {
                 let aValue, bValue;
 
@@ -294,8 +422,8 @@
                         break;
 
                     case 'commonCats':
-                        aValue = JSON.parse(a.getAttribute('data-common-cats')).length;
-                        bValue = JSON.parse(b.getAttribute('data-common-cats')).length;
+                        aValue = JSON.parse(a.getAttribute('data-common-cats') || '[]').length;
+                        bValue = JSON.parse(b.getAttribute('data-common-cats') || '[]').length;
                         break;
 
                     case 'waitTime':
@@ -317,11 +445,9 @@
                 return newDir === 'asc' ? aValue - bValue : bValue - aValue;
             });
 
-            // Перестраиваем таблицу
             rows.forEach(row => tbody.appendChild(row));
         }
 
-        // Функция преобразования времени в секунды
         function timeStringToSeconds(timeStr) {
             if (!timeStr || timeStr === '-' || timeStr === '<1s') return 0;
 

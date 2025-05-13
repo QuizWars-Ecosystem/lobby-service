@@ -33,10 +33,10 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  500,
-			MaxRating:     5_000,
+			PlayersCount:  10_000,
+			MaxRating:     10_000,
 			CategoriesMax: 10,
-			CategoryMaxID: 10,
+			CategoryMaxID: 20,
 			Modes: []string{
 				"classic",
 				"battle",
@@ -110,7 +110,7 @@ func NewTestConfig() *TestConfig {
 						RatingWeight:     0.9,
 						CategoryWeight:   0.1,
 						FillWeight:       0.0,
-						MaxRatingDiff:    500,
+						MaxRatingDiff:    600,
 						MinCategoryMatch: 0.2,
 					},
 					"battle": {
@@ -131,7 +131,7 @@ func NewTestConfig() *TestConfig {
 						RatingWeight:     0.3,
 						CategoryWeight:   0.4,
 						FillWeight:       0.3,
-						MaxRatingDiff:    800,
+						MaxRatingDiff:    1500,
 						MinCategoryMatch: 0.4,
 					},
 					"team": {

@@ -60,12 +60,11 @@ func (r *Result) GenerateHTMLReport() error {
 	}
 
 	data.RowsByMode = make(map[string][]LobbyStatView)
-	threshold := 0.6
 
 	data.RedisNodes = r.Cfg.Redis.Masters + r.Cfg.Redis.Replicas*r.Cfg.Redis.Masters
 
 	for id, lobby := range r.Lobbies {
-		view := r.createLobbyStatView(id, lobby, threshold)
+		view := r.createLobbyStatView(id, lobby)
 		data.RowsByMode[lobby.Mode] = append(data.RowsByMode[lobby.Mode], view)
 	}
 
@@ -95,6 +94,7 @@ func (r *Result) GenerateHTMLReport() error {
 		"div":                   func(a, b float64) float64 { return a / b * 100 },
 		"mul":                   func(a, b float64) float64 { return a * b },
 		"sub":                   func(a, b float64) float64 { return a - b },
+		"add":                   func(a, b float64) float64 { return a + b },
 		"toFloat64":             func(x int) float64 { return float64(x) },
 		"toFloat64Int32":        func(x int32) float64 { return float64(x) },
 		"randomColor": func(seed string) string {
@@ -137,7 +137,14 @@ func (r *Result) GenerateHTMLReport() error {
 	return nil
 }
 
-func (r *Result) createLobbyStatView(id string, lobby *LobbyStat, threshold float64) LobbyStatView {
+func (r *Result) createLobbyStatView(id string, lobby *LobbyStat) LobbyStatView {
+	cfg := r.Cfg.ServiceConfig.Matcher.Configs[lobby.Mode]
+	if cfg.MinCategoryMatch == 0 {
+		cfg = r.Cfg.ServiceConfig.Matcher.Configs["default"]
+	}
+
+	threshold := cfg.MinCategoryMatch
+
 	var sum int32
 	minRating := int32(math.MaxInt32)
 	maxRating := int32(math.MinInt32)
@@ -323,12 +330,14 @@ func (r *Result) checkMatchConditions(lobby *LobbyStat, mode string) (bool, bool
 	categoryMatch := calculateCategoryMatch(lobby.categoriesSet)
 	categoryValid := categoryMatch >= cfg.MinCategoryMatch
 
-	overallScore := 0.0
+	ratingPercent := 0.0
 	if cfg.MaxRatingDiff > 0 {
-		ratingScore := 1.0 - math.Min(1.0, ratingDiff/cfg.MaxRatingDiff)
-		overallScore += ratingScore * 0.5
+		ratingPercent = 1.0 - math.Min(1.0, ratingDiff/cfg.MaxRatingDiff)
 	}
-	overallScore += math.Min(1.0, categoryMatch/cfg.MinCategoryMatch) * 0.5
+
+	categoryPercent := math.Min(1.0, categoryMatch/cfg.MinCategoryMatch)
+
+	overallScore := ratingPercent*cfg.RatingWeight + categoryPercent*cfg.CategoryWeight
 
 	return ratingValid, categoryValid, ratingDiff, categoryMatch, overallScore
 }

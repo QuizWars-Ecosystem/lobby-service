@@ -3,22 +3,18 @@ package streamer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"sync"
 )
 
 const (
-	updatesLobbyChannelKey     = "lobby.updates.%s"
-	joinLobbyRequestSubjectKey = "lobby.join.request.%s"
+	updatesLobbyChannelKey = "lobby.updates.%s"
 )
 
 type JoinLobbyRequest struct {
@@ -128,90 +124,6 @@ func (s *StreamManager) BroadcastLobbyUpdate(lobbyID string, status *lobbyv1.Lob
 		if err := stream.Send(status); err != nil {
 			delete(s.localStreams[lobbyID], id)
 		}
-	}
-}
-
-func (s *StreamManager) SendJoinLobbyRequest(ctx context.Context, lobbyID string, player *models.Player) (*JoinLobbyResponse, error) {
-	subject := fmt.Sprintf(joinLobbyRequestSubjectKey, lobbyID)
-	reply := nats.NewInbox()
-
-	respCh := make(chan *JoinLobbyResponse, 1)
-
-	sub, err := s.ns.Subscribe(reply, func(msg *nats.Msg) {
-		var resp JoinLobbyResponse
-		if err := json.Unmarshal(msg.Data, &resp); err == nil {
-			respCh <- &resp
-		} else {
-			s.logger.Warn("Failed to unmarshal join lobby response", zap.Error(err))
-		}
-	})
-	if err != nil {
-		s.logger.Error("NATS subscribe failed", zap.Error(err))
-		return nil, err
-	}
-	defer func() {
-		if err = sub.Unsubscribe(); err != nil {
-			s.logger.Error("NATS unsubscribe failed", zap.Error(err))
-		}
-	}()
-
-	req := JoinLobbyRequest{Player: player}
-	data, err := json.Marshal(&req)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = s.ns.PublishRequest(subject, reply, data); err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case resp := <-respCh:
-		return resp, nil
-	case <-time.After(time.Second * 5):
-		return nil, errors.New("join lobby response timeout")
-	}
-}
-
-func (s *StreamManager) subscribeJoinLobbyRequests(lobbyID string) {
-	subject := fmt.Sprintf(joinLobbyRequestSubjectKey, lobbyID)
-
-	_, err := s.ns.Subscribe(subject, func(msg *nats.Msg) {
-		var req JoinLobbyRequest
-		if err := json.Unmarshal(msg.Data, &req); err != nil {
-			s.logger.Warn("Invalid join lobby request", zap.Error(err))
-			return
-		}
-
-		resp := JoinLobbyResponse{
-			Accepted: true,
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer cancel()
-
-		if err := s.store.AddPlayer(ctx, lobbyID, req.Player); err != nil {
-			s.logger.Warn("Failed to add player to store", zap.String("lobby_id", lobbyID), zap.Error(err))
-			resp = JoinLobbyResponse{
-				Accepted: false,
-				Reason:   err.Error(),
-			}
-		}
-
-		data, err := json.Marshal(&resp)
-		if err != nil {
-			s.logger.Warn("Failed to marshal join lobby response", zap.Error(err))
-			return
-		}
-
-		if err = s.ns.Publish(msg.Reply, data); err != nil {
-			s.logger.Warn("Failed to reply join lobby request", zap.Error(err))
-		}
-	})
-	if err != nil {
-		s.logger.Error("Failed to subscribe to join lobby requests", zap.Error(err))
 	}
 }
 

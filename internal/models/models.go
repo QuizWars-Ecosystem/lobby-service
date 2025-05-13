@@ -31,6 +31,7 @@ func (l *Lobby) AddPlayer(player *Player) bool {
 	l.Players = append(l.Players, player)
 	l.AvgRating = countAvgRating(l.Players)
 	l.Categories = mergeCategories(l.Categories, player.Categories)
+	player.JoinedAt = time.Now()
 	l.LastJoinedAt = time.Now()
 	l.Version++
 

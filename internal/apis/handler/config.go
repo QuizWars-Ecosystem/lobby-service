@@ -6,6 +6,7 @@ type Config struct {
 	ModeStats        map[string]StatPair `mapstructure:"mode_stats" yaml:"mode_stats"`
 	LobbyTLL         time.Duration       `mapstructure:"lobby_tll" yaml:"lobby_tll" default:"4m"`
 	MaxLobbyAttempts int                 `mapstructure:"max_lobby_attempts" yaml:"max_lobby_attempts" default:"3"`
+	TopLobbiesLimit  int                 `mapstructure:"top_lobbies_limit" yaml:"top_lobbies_limit" default:"25"`
 }
 
 func (h *Handler) SectionKey() string {
@@ -38,7 +39,7 @@ func (h *Handler) getLobbyTLL() time.Duration {
 	h.mx.RLock()
 	defer h.mx.RUnlock()
 	if h.cfg.LobbyTLL < time.Minute {
-		return time.Minute
+		h.cfg.LobbyTLL = time.Minute
 	}
 	return h.cfg.LobbyTLL
 }
@@ -47,7 +48,16 @@ func (h *Handler) getMaxLobbyAttempts() int {
 	h.mx.RLock()
 	defer h.mx.RUnlock()
 	if h.cfg.MaxLobbyAttempts < 2 {
-		return 2
+		h.cfg.MaxLobbyAttempts = 2
 	}
 	return h.cfg.MaxLobbyAttempts
+}
+
+func (h *Handler) getTopLobbiesLimit() int {
+	h.mx.RLock()
+	defer h.mx.RUnlock()
+	if h.cfg.TopLobbiesLimit < 10 {
+		h.cfg.TopLobbiesLimit = 10
+	}
+	return h.cfg.TopLobbiesLimit
 }

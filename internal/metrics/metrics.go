@@ -5,13 +5,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-const (
-	LobbyWaitingStatus  = "waiting"
-	LobbyStartingStatus = "starting"
-	LobbyTimeoutStatus  = "timeout"
-	LobbyErrorStatus    = "error"
-)
-
 var (
 	LobbyWaitTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "lobby_wait_seconds",

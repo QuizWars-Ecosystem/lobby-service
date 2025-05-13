@@ -31,6 +31,7 @@ func (m *Matcher) FilterLobbies(mode string, lobbies []*models.Lobby, player *mo
 			result = append(result, l)
 		}
 	}
+
 	return result
 }
 

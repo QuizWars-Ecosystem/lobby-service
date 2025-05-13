@@ -59,8 +59,6 @@ func (s *Store) AddLobby(ctx context.Context, lobby *models.Lobby) error {
 
 	score := sp.CalculateScore(lobby)
 
-	// s.logger.Info("Lobby data", zap.String("lobby_id", lobby.ID), zap.String("mode", lobby.Mode), zap.Int16("version", lobby.Version), zap.Float64("score", score), zap.Int32s("categories", lobby.Categories))
-
 	data, err := json.Marshal(lobby)
 	if err != nil {
 		s.logger.Error("Failed to marshal lobby", zap.String("lobby_id", lobby.ID), zap.Error(err))

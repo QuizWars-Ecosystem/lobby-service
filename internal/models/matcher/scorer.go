@@ -24,12 +24,7 @@ func NewLobbyScorer(config *Config) *LobbyScorer {
 	scorers := make(map[string]Scorer)
 
 	for mode, cfg := range config.Configs {
-		switch mode {
-		default:
-			scorers["default"] = &DefaultScorer{
-				Config: cfg,
-			}
-		}
+		scorers[mode] = newScorer(mode, cfg)
 	}
 
 	return &LobbyScorer{
@@ -47,22 +42,52 @@ func (s *LobbyScorer) UpdateConfig(newCfg *Config) error {
 	defer s.mx.Unlock()
 
 	s.config = newCfg
+
+	for mode, cfg := range newCfg.Configs {
+		s.scorers[mode] = newScorer(mode, cfg)
+	}
+
 	return nil
 }
 
 func (s *LobbyScorer) GetScorer(mode string) Scorer {
+	s.mx.RLock()
 	scorer, ok := s.scorers[mode]
-	if !ok {
-		s.mx.RLock()
-		c := s.config.GetConfig(mode)
-		s.mx.RUnlock()
+	s.mx.RUnlock()
 
-		scorer = &DefaultScorer{
-			Config: c,
-		}
-
-		s.scorers[mode] = scorer
+	if ok {
+		return scorer
 	}
 
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
+	if scorer, ok = s.scorers[mode]; ok {
+		return scorer
+	}
+
+	c := s.config.GetConfig(mode)
+	scorer = &DefaultScorer{Config: c}
+	s.scorers[mode] = scorer
+
 	return scorer
+}
+
+func newScorer(mode string, cfg ScoringConfig) Scorer {
+	var s Scorer
+
+	switch mode {
+	case "duel":
+		s = &DuelScorer{cfg}
+	case "battle":
+		s = &BattleScorer{cfg}
+	case "classic":
+		s = &ClassicScorer{cfg}
+	case "mega":
+		s = &MegaScorer{cfg}
+	default:
+		s = &DefaultScorer{cfg}
+	}
+
+	return s
 }

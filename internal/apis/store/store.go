@@ -148,7 +148,7 @@ func (s *Store) AddPlayer(ctx context.Context, lobbyID string, player *models.Pl
 
 	mutex := s.redsync.NewMutex(lockKey,
 		redsync.WithExpiry(5*time.Second),
-		redsync.WithTries(5),
+		redsync.WithTries(3),
 		redsync.WithRetryDelayFunc(func(n int) time.Duration {
 			return time.Duration(100+rand.Intn(200)) * time.Millisecond
 		}),
@@ -157,6 +157,7 @@ func (s *Store) AddPlayer(ctx context.Context, lobbyID string, player *models.Pl
 	if err := mutex.LockContext(ctx); err != nil {
 		return err
 	}
+
 	defer func() {
 		_, _ = mutex.UnlockContext(ctx)
 	}()

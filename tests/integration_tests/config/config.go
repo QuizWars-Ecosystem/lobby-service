@@ -89,8 +89,9 @@ func NewTestConfig() *TestConfig {
 						Max: 128,
 					},
 				},
-				LobbyTLL:         time.Minute * 5,
+				LobbyTLL:         time.Minute * 10,
 				MaxLobbyAttempts: 5,
+				TopLobbiesLimit:  25,
 			},
 			Lobby: &lobby.Config{
 				TickerTimeout:    time.Second,

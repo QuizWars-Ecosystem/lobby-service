@@ -2,7 +2,6 @@ package modules
 
 import (
 	"context"
-	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -47,8 +46,7 @@ func LobbyServiceTest(t *testing.T, client lobbyv1.LobbyServiceClient, cfg *conf
 
 			go watchStream(p, stream, r, wg, cancel)
 
-			diff := rand.IntN(15)
-			time.Sleep(time.Millisecond * time.Duration(diff))
+			time.Sleep(time.Millisecond * 15)
 		}
 
 		r.FinishRequestingMethod()

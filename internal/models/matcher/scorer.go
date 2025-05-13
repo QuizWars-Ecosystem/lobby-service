@@ -85,6 +85,10 @@ func newScorer(mode string, cfg ScoringConfig) Scorer {
 		s = &ClassicScorer{cfg}
 	case "mega":
 		s = &MegaScorer{cfg}
+	case "team":
+		s = &TeamScorer{cfg}
+	case "blitz":
+		s = &BlitzScorer{cfg}
 	default:
 		s = &DefaultScorer{cfg}
 	}

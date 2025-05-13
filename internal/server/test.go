@@ -20,7 +20,6 @@ import (
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/streamer"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/config"
-	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -85,8 +84,6 @@ func NewTestServer(_ context.Context, cfg *config.Config) (*TestServer, error) {
 	cl.PushNE(healthServer.Shutdown)
 
 	lobbyv1.RegisterLobbyServiceServer(grpcServer, hand)
-
-	metrics.Initialize()
 
 	return &TestServer{
 		grpcServer: grpcServer,

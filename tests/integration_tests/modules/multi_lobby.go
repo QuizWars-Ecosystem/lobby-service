@@ -54,7 +54,7 @@ func MultiLobbyServiceTest(t *testing.T, manager *clients.Manager, cfg *config.T
 
 					go watchStream(p, stream, r, wg, cancel)
 
-					time.Sleep(time.Millisecond * 20)
+					time.Sleep(time.Millisecond * 25)
 				}
 
 				wgWorkers.Done()

@@ -1,6 +1,8 @@
 package matchmaking
 
 import (
+	"math"
+
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
@@ -19,9 +21,8 @@ func NewMatcher(cfg *matcher.Config) *Matcher {
 }
 
 func (m *Matcher) FilterLobbies(mode string, lobbies []*models.Lobby, player *models.Player) []*models.Lobby {
-	var result []*models.Lobby
-
 	scorer := m.lobbyScorer.GetScorer(mode)
+	result := make([]*models.Lobby, 0, len(lobbies))
 
 	for _, l := range lobbies {
 		if scorer.Filter(l, player) {
@@ -33,21 +34,21 @@ func (m *Matcher) FilterLobbies(mode string, lobbies []*models.Lobby, player *mo
 }
 
 func (m *Matcher) SelectBestLobby(mode string, lobbies []*models.Lobby, player *models.Player) *models.Lobby {
-	var (
-		best   *models.Lobby
-		bestSc float64
-	)
-
-	scorer := m.lobbyScorer.GetScorer(mode)
-
-	for _, l := range lobbies {
-		score := scorer.Score(l, player)
-
-		if best == nil || score > bestSc {
-			best = l
-			bestSc = score
-		}
+	if len(lobbies) == 0 {
+		return nil
 	}
 
-	return best
+	scorer := m.lobbyScorer.GetScorer(mode)
+	var (
+		bestLobby *models.Lobby
+		bestScore = math.Inf(-1)
+	)
+
+	for _, lobby := range lobbies {
+		if score := scorer.Score(lobby, player); score > bestScore {
+			bestLobby = lobby
+			bestScore = score
+		}
+	}
+	return bestLobby
 }

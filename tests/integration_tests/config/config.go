@@ -34,7 +34,7 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  10_000,
+			PlayersCount:  25_000,
 			MaxRating:     10_000,
 			CategoriesMax: 10,
 			CategoryMaxID: 25,
@@ -89,7 +89,7 @@ func NewTestConfig() *TestConfig {
 						Max: 128,
 					},
 				},
-				LobbyTLL:         time.Minute * 10,
+				LobbyTLL:         time.Minute * 5,
 				MaxLobbyAttempts: 5,
 				TopLobbiesLimit:  25,
 			},

@@ -27,7 +27,6 @@ const (
 type Store struct {
 	db            redis.UniversalClient
 	redsync       *redsync.Redsync
-	mu            sync.RWMutex
 	scoreProvider *scorer.ScoreProviders
 	logger        *zap.Logger
 }

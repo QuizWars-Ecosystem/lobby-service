@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/DavidMovas/gopherbox/pkg/closer"
 	"github.com/QuizWars-Ecosystem/go-common/pkg/clients"

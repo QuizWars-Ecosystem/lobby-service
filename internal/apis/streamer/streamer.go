@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/apis/store"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"sync"
 )
 
 const (
@@ -130,13 +131,10 @@ func (s *StreamManager) BroadcastLobbyUpdate(lobbyID string, status *lobbyv1.Lob
 func (s *StreamManager) watchStream(lobbyID, playerID string, stream grpc.ServerStreamingServer[lobbyv1.LobbyStatus]) {
 	ctx := stream.Context()
 
-	select {
-	case <-ctx.Done():
-		s.mu.Lock()
-		if s.localStreams[lobbyID] != nil && s.localStreams[lobbyID][playerID] != nil {
-			delete(s.localStreams[lobbyID], playerID)
-		}
-		s.mu.Unlock()
-		return
+	<-ctx.Done()
+	s.mu.Lock()
+	if s.localStreams[lobbyID] != nil && s.localStreams[lobbyID][playerID] != nil {
+		delete(s.localStreams[lobbyID], playerID)
 	}
+	s.mu.Unlock()
 }

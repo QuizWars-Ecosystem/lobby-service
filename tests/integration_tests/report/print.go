@@ -13,19 +13,17 @@ import (
 )
 
 type statRow struct {
-	id            string
-	mode          string
-	count         int
-	max           int
-	avgRating     float64
-	minRating     int32
-	maxRating     int32
-	commonCats    []int
-	uniqueCats    []int
-	waitDuration  string
-	status        string
-	ratingSet     map[string]int32
-	categoriesSet map[string][]int32
+	id           string
+	mode         string
+	count        int
+	max          int
+	avgRating    float64
+	minRating    int32
+	maxRating    int32
+	commonCats   []int
+	uniqueCats   []int
+	waitDuration string
+	status       string
 }
 
 func (r *Result) LogStatsPrint() {
@@ -138,8 +136,8 @@ func (r *Result) LogStatsPrint() {
 		{"❌ Errored Lobbies", len(r.Errored)},
 		{"❌ Errored Players", len(r.ErroredPlayers)},
 		{"👥 Players in Lobbies", fmt.Sprintf("%d (%.1f%%)", playersInLobbies, float64(playersInLobbies)/float64(r.TotalPlayers)*100)},
-		{"⌛️ Requesting Duration", fmt.Sprintf(r.FinishRequesting.Sub(r.StartedAt).Truncate(time.Second).String())},
-		{"⌛️ Test Duration", fmt.Sprintf(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String())},
+		{"⌛️ Requesting Duration", fmt.Sprint(r.FinishRequesting.Sub(r.StartedAt).Truncate(time.Second).String())},
+		{"⌛️ Test Duration", fmt.Sprint(r.FinishedAt.Sub(r.StartedAt).Truncate(time.Second).String())},
 	})
 	summary.Render()
 	fmt.Println()

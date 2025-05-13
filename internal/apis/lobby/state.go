@@ -3,11 +3,12 @@ package lobby
 import (
 	"context"
 	"fmt"
+	"time"
+
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"go.uber.org/zap"
-	"time"
 )
 
 type State string
@@ -63,9 +64,7 @@ func (w *Waiter) handleReadyLobby(ctx context.Context, lobby *models.Lobby) erro
 		MaxPlayers:     int32(lobby.MaxPlayers),
 	}
 
-	if err := w.store.RemoveLobby(ctx, lobby.ID, lobby.Mode); err != nil {
-		return fmt.Errorf("remove lobby: %w", err)
-	}
+	w.removeLobby(ctx, lobby, "starting")
 
 	w.broadcastStatus(lobby.ID, status)
 	metrics.LobbyWaitTime.WithLabelValues(lobby.Mode).Observe(time.Since(lobby.CreatedAt).Seconds())
@@ -81,9 +80,7 @@ func (w *Waiter) handleExpiredLobby(ctx context.Context, lobby *models.Lobby) er
 		CurrentPlayers: int32(len(lobby.Players)),
 	}
 
-	if err := w.store.RemoveLobby(ctx, lobby.ID, lobby.Mode); err != nil {
-		w.logger.Warn("Failed to expire lobby", zap.Error(err))
-	}
+	w.removeLobby(ctx, lobby, "timeout")
 
 	w.broadcastStatus(lobby.ID, status)
 	return nil
@@ -103,11 +100,7 @@ func (w *Waiter) handleWaitingState(lobby *models.Lobby) error {
 func (w *Waiter) handleInactiveLobby(ctx context.Context, lobby *models.Lobby) error {
 	defer metrics.LobbyStatusChanges.WithLabelValues("inactive").Inc()
 
-	if err := w.store.RemoveLobby(ctx, lobby.ID, lobby.Mode); err != nil {
-		w.logger.Warn("Failed to remove inactive lobby",
-			zap.String("lobby_id", lobby.ID),
-			zap.Error(err))
-	}
+	w.removeLobby(ctx, lobby, "inactive")
 
 	w.logger.Info("Lobby removed due to inactivity",
 		zap.String("lobby_id", lobby.ID),

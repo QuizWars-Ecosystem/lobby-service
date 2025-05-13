@@ -2,11 +2,12 @@ package handler
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/metrics"
 	"github.com/jaevor/go-nanoid"
 	"google.golang.org/grpc/status"
-	"sync"
-	"time"
 
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	lobbyv1 "github.com/QuizWars-Ecosystem/lobby-service/gen/external/lobby/v1"

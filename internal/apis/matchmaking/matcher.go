@@ -1,8 +1,6 @@
 package matchmaking
 
 import (
-	"sync"
-
 	"github.com/QuizWars-Ecosystem/go-common/pkg/abstractions"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models/matcher"
@@ -11,7 +9,6 @@ import (
 var _ abstractions.ConfigSubscriber[*matcher.Config] = (*Matcher)(nil)
 
 type Matcher struct {
-	mx          sync.RWMutex
 	lobbyScorer *matcher.LobbyScorer
 }
 

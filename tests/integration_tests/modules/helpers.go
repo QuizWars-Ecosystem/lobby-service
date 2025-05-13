@@ -56,7 +56,7 @@ func watchStream(player player, stream grpc.ServerStreamingClient[lobbyv1.LobbyS
 					status.Code(err) == codes.DeadlineExceeded {
 					return
 				}
-				slog.Error("failed to receive response", err)
+				slog.Error("failed to receive response", slog.String("reason", err.Error()))
 				return
 
 			case res := <-resCh:

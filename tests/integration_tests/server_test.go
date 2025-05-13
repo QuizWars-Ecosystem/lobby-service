@@ -26,7 +26,7 @@ func runServer(t *testing.T, cfg *config.TestConfig) {
 		var err error
 
 		manager := clients.NewManager(t.Context())
-		initialPort := cfg.ServiceConfig.ServiceConfig.GRPCPort
+		initialPort := cfg.ServiceConfig.GRPCPort
 
 		for i := 0; i < cfg.ServerAmount; i++ {
 			initialPort++

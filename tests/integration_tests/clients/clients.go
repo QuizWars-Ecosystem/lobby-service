@@ -85,14 +85,14 @@ func (m *Manager) Stop() error {
 
 	var err error
 	for _, conn := range m.coons {
-		errors.Join(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 	}
 
 	stopCtx, cancel := context.WithTimeout(m.ctx, time.Second*30)
 	defer cancel()
 
 	for _, server := range m.servers {
-		errors.Join(err, server.Server.Shutdown(stopCtx))
+		err = errors.Join(err, server.Server.Shutdown(stopCtx))
 	}
 
 	return err

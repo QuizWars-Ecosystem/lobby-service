@@ -46,19 +46,3 @@ func jaccardIndex(a, b []int32) float64 {
 	}
 	return float64(inter) / float64(union)
 }
-
-func countIntersect(a, b []int32) int {
-	set := make(map[int32]struct{}, len(a))
-	for _, v := range a {
-		set[v] = struct{}{}
-	}
-
-	count := 0
-	for _, v := range b {
-		if _, ok := set[v]; ok {
-			count++
-		}
-	}
-
-	return count
-}

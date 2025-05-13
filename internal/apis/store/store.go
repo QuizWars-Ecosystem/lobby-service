@@ -85,7 +85,7 @@ func (s *Store) GetLobby(ctx context.Context, lobbyID string) (*models.Lobby, er
 
 	data, err := s.db.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
-		s.logger.Error("Lobby not found", zap.String("lobby_id", lobbyID))
+		s.logger.Debug("Lobby not found", zap.String("lobby_id", lobbyID))
 		return nil, err
 	} else if err != nil {
 		s.logger.Error("Failed to get data from db", zap.String("lobby_id", lobbyID), zap.Error(err))

@@ -28,13 +28,13 @@ func NewTestConfig() *TestConfig {
 	redisClusterCfg := test.DefaultRedisClusterConfig()
 	natsCfg := test.DefaultNatsConfig()
 
-	redisClusterCfg.Masters = 3
+	redisClusterCfg.Masters = 5
 	redisClusterCfg.Replicas = 2
 
 	return &TestConfig{
 		ServerAmount: 3,
 		Generator: &Generator{
-			PlayersCount:  25_000,
+			PlayersCount:  10_000,
 			MaxRating:     10_000,
 			CategoriesMax: 10,
 			CategoryMaxID: 25,
@@ -58,7 +58,7 @@ func NewTestConfig() *TestConfig {
 				ConsulURL:    "consul:8500",
 			},
 			Logger: &log.Config{
-				Level: "debug",
+				Level: "info",
 			},
 			Redis: &config.RedisConfig{},
 			NATS:  &config.NATSConfig{},
@@ -91,7 +91,7 @@ func NewTestConfig() *TestConfig {
 				},
 				LobbyTLL:         time.Minute * 5,
 				MaxLobbyAttempts: 5,
-				TopLobbiesLimit:  25,
+				TopLobbiesLimit:  100,
 			},
 			Lobby: &lobby.Config{
 				TickerTimeout:    time.Second,

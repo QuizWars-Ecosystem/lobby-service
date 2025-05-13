@@ -1,15 +1,18 @@
 package scorer
 
 import (
-	"time"
-
 	"github.com/QuizWars-Ecosystem/lobby-service/internal/models"
 )
+
+var _ Provider = (*MegaScoreProvider)(nil)
 
 type MegaScoreProvider struct{}
 
 func (m *MegaScoreProvider) CalculateScore(lobby *models.Lobby) float64 {
-	score := float64(len(lobby.Players)) + time.Since(lobby.CreatedAt).Seconds()
-	score += float64(lobby.MaxPlayers - (lobby.MaxPlayers - int16(len(lobby.Players))))
-	return score
+	fillScore := float64(len(lobby.Players)) / 128.0
+
+	if fillScore > 0.4 {
+		return fillScore * 1.5
+	}
+	return fillScore
 }
